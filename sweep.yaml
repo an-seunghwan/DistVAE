@@ -1,0 +1,20 @@
+project: (proposal)CausalVAE
+# program: main.py
+program: main_semi.py
+method: grid
+metric:
+  goal: minimize
+  name: loss
+parameters:
+  # model:
+  #   values: ['VAE', 'InfoMax', 'GAM']
+  scm:
+    values: ['linear', 'nonlinear']
+  beta:
+    values: [0.1, 1, 10]
+  labeled_ratio:
+    values: [0.1, 0.3, 0.5]
+  # lambda:
+  #   values: [5, 10]
+  # gamma:
+  #   values: [1, 5, 10]
