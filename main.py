@@ -168,7 +168,7 @@ def main():
     artifact.add_file('./main.py')
     artifact.add_file('./modules/model.py')
     wandb.log_artifact(artifact)
-    
+    #%%    
     wandb.run.finish()
 #%%
 if __name__ == '__main__':
