@@ -61,15 +61,15 @@ def get_args(debug):
                         help="the number of latent codes")
     
     # optimization options
-    parser.add_argument('--epochs', default=100, type=int,
+    parser.add_argument('--epochs', default=30, type=int,
                         help='maximum iteration')
-    parser.add_argument('--batch_size', default=512, type=int,
+    parser.add_argument('--batch_size', default=1024, type=int,
                         help='batch size')
     parser.add_argument('--lr', default=0.001, type=float,
                         help='learning rate')
     
     # loss coefficients
-    parser.add_argument('--beta', default=0.1, type=float,
+    parser.add_argument('--beta', default=1, type=float,
                         help='observation noise')
   
     if debug:
@@ -79,10 +79,10 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-    # wandb.config.update(config)
+    wandb.config.update(config)
     
     set_random_seed(config["seed"])
     torch.manual_seed(config["seed"])

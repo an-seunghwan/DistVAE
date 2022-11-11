@@ -38,7 +38,7 @@ def train_VAE(dataloader, model, config, optimizer, device):
             mask = torch.cat(mask, axis=1)
             mask = torch.where(mask <= x_batch[:, [j]], 
                             mask, 
-                            torch.zeros(())).type(torch.bool).type(torch.float)
+                            torch.zeros(()).to(device)).type(torch.bool).type(torch.float)
             alpha_tilde = x_batch[:, [j]] - gamma[j]
             alpha_tilde += (mask * beta[j] * model.delta).sum(axis=1, keepdims=True)
             alpha_tilde /= (mask * beta[j]).sum(axis=1, keepdims=True) + 1e-6
