@@ -98,7 +98,7 @@ def main():
             df = pd.read_csv('./data/creditcard.csv')
             df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True)
             continuous = [x for x in df.columns if x != 'Class']
-            self.y_data = df["Class"].to_numpy()[:, None]
+            self.y_data = df["Class"].to_numpy()[:int(len(df) * 0.8), None]
             df = df[continuous]
             self.continuous = continuous
             

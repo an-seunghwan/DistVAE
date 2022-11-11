@@ -58,8 +58,8 @@ class VAE(nn.Module):
         return gamma, beta
     
     def quantile_function(self, alpha, gamma, beta, j):
-        return gamma[j] + (beta[j] * torch.where(alpha.to(self.device) - self.delta > 0,
-                                                alpha.to(self.device) - self.delta,
+        return gamma[j] + (beta[j] * torch.where(alpha - self.delta > 0,
+                                                alpha - self.delta,
                                                 torch.zeros(()).to(self.device))).sum(axis=1, keepdims=True)
     
     def forward(self, input, deterministic=False):
