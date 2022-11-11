@@ -20,9 +20,9 @@ from modules.simulation import (
     set_random_seed
 )
 
-# from modules.model import (
-    
-# )
+from modules.model import (
+    VAE
+)
 #%%
 # import sys
 # import subprocess
@@ -75,6 +75,85 @@ def get_args(debug):
     else:    
         return parser.parse_args()
 #%%
+def train_VAE(dataloader, model, config, optimizer, device):
+    logs = {
+        'loss': [], 
+        'quantile': [],
+        'KL': [],
+    }
+    # for debugging
+    for i in range(config["latent_dim"]):
+        logs['posterior_variance{}'.format(i+1)] = []
+    
+    for (x_batch, _) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
+        
+        if config["cuda"]:
+            x_batch = x_batch.cuda()
+            # y_batch = y_batch.cuda()
+        
+        # with torch.autograd.set_detect_anomaly(True):    
+        optimizer.zero_grad()
+        
+        z, mean, logvar, gamma, beta = model(x_batch)
+        
+        loss_ = []
+        
+        """alpha_tilde"""
+        j = 0
+        alpha_tilde_list = []
+        for j in range(config["input_dim"]):
+            mask = [model.quantile_function(d, gamma, beta, j) for d in model.delta[0]]
+            mask = torch.cat(mask, axis=1)
+            mask = torch.where(mask <= x_batch[:, [j]], 
+                            mask, 
+                            torch.zeros(())).type(torch.bool).type(torch.float)
+            alpha_tilde = x_batch[:, [j]] - gamma[j]
+            alpha_tilde += (mask * beta[j] * model.delta).sum(axis=1, keepdims=True)
+            alpha_tilde /= (mask * beta[j]).sum(axis=1, keepdims=True) + 1e-6
+            alpha_tilde = torch.clip(alpha_tilde, 1e-4, 1) # numerical stability
+            alpha_tilde_list.append(alpha_tilde)
+        
+        """loss"""
+        j = 0
+        total_loss = 0
+        for j in range(config["input_dim"]):
+            term = (1 - model.delta.pow(3)) / 3 - model.delta - torch.maximum(alpha_tilde_list[j], model.delta).pow(2)
+            term += 2 * torch.maximum(alpha_tilde_list[j], model.delta) * model.delta
+            
+            loss = (2 * alpha_tilde_list[j]) * x_batch[:, [j]]
+            loss += (1 - 2 * alpha_tilde_list[j]) * gamma[j]
+            loss += (beta[j] * term).sum(axis=1, keepdims=True)
+            loss *= 0.5
+            total_loss += loss.mean()
+        # print(loss.mean())
+        loss_.append(('quantile', total_loss))
+        
+        """KL-Divergence"""
+        KL = torch.pow(mean, 2).sum(axis=1)
+        KL -= logvar.sum(axis=1)
+        KL += torch.exp(logvar).sum(axis=1)
+        KL -= config["latent_dim"]
+        KL *= 0.5
+        KL = KL.mean()
+        loss_.append(('KL', KL))
+        
+        ### posterior variance: for debugging
+        var_ = torch.exp(logvar).mean(axis=0)
+        for i in range(config["latent_dim"]):
+            loss_.append(('posterior_variance{}'.format(i+1), var_[i]))
+        
+        loss = total_loss + config["beta"] * KL 
+        loss_.append(('loss', loss))
+        
+        loss.backward()
+        optimizer.step()
+            
+        """accumulate losses"""
+        for x, y in loss_:
+            logs[x] = logs.get(x) + [y.item()]
+    
+    return logs
+#%%
 def main():
     #%%
     config = vars(get_args(debug=True)) # default configuration
@@ -91,26 +170,45 @@ def main():
     load dataset: Credit
     Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
     """
-    df = pd.read_csv('./data/creditcard.csv')
-    df = df.sample(frac=1).reset_index(drop=True)
-    continuous = [x for x in df.columns if x != 'Class']
-    df = df[continuous]
+    class TabularDataset(Dataset): 
+        def __init__(self, config):
+            df = pd.read_csv('./data/creditcard.csv')
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True)
+            continuous = [x for x in df.columns if x != 'Class']
+            self.y_data = df["Class"].to_numpy()[:, None]
+            df = df[continuous]
+            self.continuous = continuous
+            
+            train = df.iloc[:int(len(df) * 0.8)]
+            # test = df.iloc[int(len(df) * 0.8):]
+            
+            # scaling
+            mean = train.mean(axis=0)
+            std = train.std(axis=0)
+            self.mean = mean
+            self.std = std
+            train = (train - mean) / std
+            # test = (test - mean) / std
+            self.train = train
+            self.x_data = train.to_numpy()
+
+        def __len__(self): 
+            return len(self.x_data)
+
+        def __getitem__(self, idx): 
+            x = torch.FloatTensor(self.x_data[idx])
+            y = torch.FloatTensor(self.y_data[idx])
+            return x, y
     
-    config["input_dim"] = len(continuous)
-    
-    train = df.iloc[:int(len(df) * 0.8)]
-    test = df.iloc[int(len(df) * 0.8):]
-    # scaling
-    mean = train.mean(axis=0)
-    std = train.std(axis=0)
-    train = (train - mean) / std
-    test = (test - mean) / std
+    dataset = TabularDataset(config)
+    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
+    config["input_dim"] = len(dataset.continuous)
     #%%
     """Empirical quantile plot"""
     q = np.arange(0, 1, 0.01)
     fig, ax = plt.subplots(5, 6, figsize=(12, 10))
-    for k, v in enumerate(continuous):
-        ax.flatten()[k].plot(q, np.quantile(train[v], q=q))
+    for k, v in enumerate(dataset.continuous):
+        ax.flatten()[k].plot(q, np.quantile(dataset.train[v], q=q))
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
@@ -118,92 +216,44 @@ def main():
     plt.show()
     plt.close()
     #%%
-    """model"""
-    """encoder"""
-    encoder = nn.Sequential(
-        nn.Linear(config["input_dim"], 16),
-        nn.ReLU(),
-        nn.Linear(16, 8),
-        nn.ReLU(),
-        nn.Linear(8, config["latent_dim"] * 2),
-    ).to(device)
-    
-    M = 10
-    spline = nn.Sequential(
-        nn.Linear(config["latent_dim"], 4),
-        nn.ReLU(),
-        nn.Linear(4, config["input_dim"] * (1 + (M + 1))),
-    ).to(device)
-    #%%
-    batch = torch.randn(10, config["input_dim"])
-    h = encoder(batch)
-    mean, logvar = torch.split(h, config["latent_dim"], dim=1)
-    
-    deterministic = False
-    if deterministic:
-        z = mean
-    else:
-        noise = torch.randn(batch.size(0), config["latent_dim"]).to(device) 
-        z = mean + torch.exp(logvar / 2) * noise
-    
-    delta = torch.arange(0, 1.1, step=0.1)
-    h = spline(z)
-    h = torch.split(h, 1 + (M + 1), dim=1)
-    
-    gamma = [h_[:, [0]] for h_ in h]
-    beta = [nn.Softplus()(h_[:, 1:]) for h_ in h] # positive constraint
-    
-    alpha = 0.5
-    quant_reg = [g + (b * torch.where(alpha - delta > 0,
-                                    alpha - delta,
-                                    torch.zeros(()))).sum(axis=1, keepdims=True) for g, b in zip(gamma, beta)]
-    
-    #%%
-    model = model.to(device)
+    model = VAE(config, device).to(device)
     
     optimizer = torch.optim.Adam(
         model.parameters(), 
         lr=config["lr"]
     )
-    
+    #%%
     model.train()
     
     for epoch in range(config["epochs"]):
-        if config["model"] == 'VAE':
-            logs, xhat = train_VAE(dataloader, model, config, optimizer, device)
-        elif config["model"] == 'InfoMax':
-            logs, xhat = train_InfoMax(dataloader, model, discriminator, config, optimizer, optimizer_D, device)
-        elif config["model"] == 'GAM':
-            logs, xhat = train_GAM(dataloader, model, config, optimizer, device)
-        else:
-            raise ValueError('Not supported model!')
+        logs = train_VAE(dataloader, model, config, optimizer, device)
         
         print_input = "[epoch {:03d}]".format(epoch + 1)
         print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
         print(print_input)
         
-        """update log"""
-        wandb.log({x : np.mean(y) for x, y in logs.items()})
+        # """update log"""
+        # wandb.log({x : np.mean(y) for x, y in logs.items()})
             
-        if epoch % 10 == 0:
-            plt.figure(figsize=(4, 4))
-            for i in range(9):
-                plt.subplot(3, 3, i+1)
-                plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
-                plt.axis('off')
-            plt.savefig('./assets/tmp_image_{}.png'.format(epoch))
-            plt.close()
+        # if epoch % 10 == 0:
+        #     plt.figure(figsize=(4, 4))
+        #     for i in range(9):
+        #         plt.subplot(3, 3, i+1)
+        #         plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+        #         plt.axis('off')
+        #     plt.savefig('./assets/tmp_image_{}.png'.format(epoch))
+        #     plt.close()
     
-    """reconstruction result"""
-    fig = plt.figure(figsize=(4, 4))
-    for i in range(9):
-        plt.subplot(3, 3, i+1)
-        plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
-        plt.axis('off')
-    plt.savefig('./assets/recon.png')
-    plt.close()
-    wandb.log({'reconstruction': wandb.Image(fig)})
-    
+    # """reconstruction result"""
+    # fig = plt.figure(figsize=(4, 4))
+    # for i in range(9):
+    #     plt.subplot(3, 3, i+1)
+    #     plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+    #     plt.axis('off')
+    # plt.savefig('./assets/recon.png')
+    # plt.close()
+    # wandb.log({'reconstruction': wandb.Image(fig)})
+    #%%
     """model save"""
     torch.save(model.state_dict(), './assets/model_{}_{}.pth'.format(config["model"], config["scm"]))
     artifact = wandb.Artifact('model_{}_{}'.format(config["model"], config["scm"]), 
