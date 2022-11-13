@@ -182,7 +182,7 @@ def main():
         plt.savefig('./assets/latent_quantile/latent_quantile_{}.png'.format(j))
         plt.show()
         plt.close()
-    wandb.log({'latent quantile example ({})'.format(dataset.continuous[j]): wandb.Image(fig)})
+        wandb.log({'latent space ~ quantile': wandb.Image(fig)})
     #%%
     """latent space"""
     latents = []
@@ -263,6 +263,9 @@ def main():
     plt.show()
     plt.close()
     wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
+    #%%
+    """synthesize the dataset"""
+    
     #%%
     wandb.run.finish()
 #%%
