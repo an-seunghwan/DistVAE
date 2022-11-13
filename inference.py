@@ -45,7 +45,7 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=1, 
+    parser.add_argument('--num', type=int, default=3, 
                         help='model version')
 
     if debug:
@@ -81,6 +81,38 @@ def main():
             df = pd.read_csv('./data/creditcard.csv')
             df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True)
             continuous = [x for x in df.columns if x != 'Class']
+            self.y_data = df["Class"].to_numpy()[:int(len(df) * 0.8), None]
+            df = df[continuous]
+            self.continuous = continuous
+            
+            train = df.iloc[:int(len(df) * 0.8)]
+            
+            # scaling
+            mean = train.mean(axis=0)
+            std = train.std(axis=0)
+            self.mean = mean
+            self.std = std
+            train = (train - mean) / std
+            self.train = train
+            self.x_data = train.to_numpy()
+
+        def __len__(self): 
+            return len(self.x_data)
+
+        def __getitem__(self, idx): 
+            x = torch.FloatTensor(self.x_data[idx])
+            y = torch.FloatTensor(self.y_data[idx])
+            return x, y
+    
+    class TestTabularDataset(Dataset): 
+        def __init__(self, config):
+            """
+            load dataset: Credit
+            Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
+            """
+            df = pd.read_csv('./data/creditcard.csv')
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True)
+            continuous = [x for x in df.columns if x != 'Class']
             self.y_data = df["Class"].to_numpy()[int(len(df) * 0.8):, None]
             df = df[continuous]
             self.continuous = continuous
@@ -107,6 +139,8 @@ def main():
     
     dataset = TabularDataset(config)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
+    test_dataset = TestTabularDataset(config)
+    test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     config["input_dim"] = len(dataset.continuous)
     #%%
     model = VAE(config, device).to(device)
@@ -117,35 +151,118 @@ def main():
                                          map_location=torch.device('cpu')))
     
     model.eval()
-    #%%
-    # for (x_batch, _) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
-        
-    #     if config["cuda"]:
-    #         x_batch = x_batch.cuda()
-    #         # y_batch = y_batch.cuda()
-        
-    #     with torch.no_grad():
-    #         z, mean, logvar, gamma, beta = model(x_batch, deterministic=True)
     #%%    
-    xs = torch.linspace(-2, 2, steps=10)
-    ys = torch.linspace(-2, 2, steps=10)
+    """3D visualization of quantile function"""
+    if not os.path.exists("./assets/latent_quantile"): 
+        os.makedirs("./assets/latent_quantile")
+            
+    xs = torch.linspace(-2, 2, steps=30)
+    ys = torch.linspace(-2, 2, steps=30)
     x, y = torch.meshgrid(xs, ys)
     grid_z = torch.cat([x.flatten()[:, None], y.flatten()[:, None]], axis=1)
     
     j = 1
     alpha = 0.5
-    quantiles = []
-    for alpha in np.linspace(0.1, 0.9, 9):
-        with torch.no_grad():
-            gamma, beta = model.quantile_parameter(grid_z)
-            quantiles.append(model.quantile_function(alpha, gamma, beta, j))
+    for j in range(config["input_dim"]):
+        quantiles = []
+        for alpha in np.linspace(0.1, 0.9, 9):
+            with torch.no_grad():
+                gamma, beta = model.quantile_parameter(grid_z)
+                quantiles.append(model.quantile_function(alpha, gamma, beta, j))
+        
+        fig = plt.figure(figsize=(6, 4))
+        ax = fig.gca(projection='3d')
+        for i in range(len(quantiles)):
+            ax.plot_surface(x.numpy(), y.numpy(), quantiles[i].reshape(x.shape).numpy())
+            ax.set_xlabel('$z_1$', fontsize=14)
+            ax.set_ylabel('$z_2$', fontsize=14)
+            ax.set_zlabel('{}'.format(dataset.continuous[j]), fontsize=14)
+        ax.view_init(30, 60)
+        plt.tight_layout()
+        plt.savefig('./assets/latent_quantile/latent_quantile_{}.png'.format(j))
+        plt.show()
+        plt.close()
+    wandb.log({'latent quantile example ({})'.format(dataset.continuous[j]): wandb.Image(fig)})
     #%%
-    ax = plt.axes(projection='3d')
-    for i in range(len(quantiles)):
-        ax.plot_surface(x.numpy(), y.numpy(), quantiles[i].reshape(x.shape).numpy())
-    plt.savefig('./assets/latent_quantile.png')
+    """latent space"""
+    latents = []
+    for (x_batch, _) in tqdm.tqdm(iter(dataloader)):
+        if config["cuda"]:
+            x_batch = x_batch.cuda()
+            # y_batch = y_batch.cuda()
+        
+        with torch.no_grad():
+            mean, logvar = model.get_posterior(x_batch)
+        latents.append(mean)
+    latents = torch.cat(latents, axis=0)
+    
+    fig = plt.figure(figsize=(5, 5))
+    plt.scatter(latents[:, 0], latents[:, 1], 
+                alpha=0.7, s=1)
+    plt.xlabel('$z_1$', fontsize=14)
+    plt.ylabel('$z_2$', fontsize=14)
+    plt.tight_layout()
+    plt.savefig('./assets/latent.png')
     plt.show()
     plt.close()
+    wandb.log({'latent space': wandb.Image(fig)})
+    #%%
+    """Empirical quantile plot"""
+    q = np.arange(0.01, 0.99, 0.01)
+    fig, ax = plt.subplots(5, 6, figsize=(12, 10))
+    for k, v in enumerate(dataset.continuous):
+        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q))
+        ax.flatten()[k].set_xlabel('alpha')
+        ax.flatten()[k].set_ylabel(v)
+    plt.tight_layout()
+    plt.savefig('./assets/empirical_quantile.png')
+    plt.show()
+    plt.close()
+    #%%
+    """estimated quantile plot"""
+    n = 100
+    q = np.arange(0.01, 0.99, 0.01)
+    j = 0
+    randn = torch.randn(n, 2) # prior
+    fig, ax = plt.subplots(6, 5, figsize=(10, 12))
+    for k, v in enumerate(dataset.continuous):
+        quantiles = []
+        for alpha in q:
+            with torch.no_grad():
+                gamma, beta = model.quantile_parameter(randn)
+                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
+        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
+        ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="prior")
+        ax.flatten()[k].set_xlabel('alpha')
+        ax.flatten()[k].set_ylabel(v)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('./assets/prior_estimated_quantile.png')
+    plt.show()
+    plt.close()
+    wandb.log({'Estimated quantile (prior)': wandb.Image(fig)})
+    #%%
+    n = 100
+    q = np.arange(0.01, 0.99, 0.01)
+    j = 0
+    idx = np.random.choice(range(len(latents)), n, replace=False)
+    fig, ax = plt.subplots(6, 5, figsize=(10, 12))
+    for k, v in enumerate(dataset.continuous):
+        quantiles = []
+        for alpha in q:
+            with torch.no_grad():
+                gamma, beta = model.quantile_parameter(latents[idx, :]) # aggregated
+                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
+        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
+        ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="aggregated")
+        ax.flatten()[k].set_xlabel('alpha')
+        ax.flatten()[k].set_ylabel(v)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('./assets/aggregated_estimated_quantile.png')
+    plt.show()
+    plt.close()
+    wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%

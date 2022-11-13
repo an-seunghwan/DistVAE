@@ -128,18 +128,6 @@ def main():
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     config["input_dim"] = len(dataset.continuous)
     #%%
-    """Empirical quantile plot"""
-    q = np.arange(0, 1, 0.01)
-    fig, ax = plt.subplots(5, 6, figsize=(12, 10))
-    for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(q, np.quantile(dataset.train[v], q=q))
-        ax.flatten()[k].set_xlabel('alpha')
-        ax.flatten()[k].set_ylabel(v)
-    plt.tight_layout()
-    plt.savefig('./assets/empirical_quantile.png')
-    # plt.show()
-    plt.close()
-    #%%
     model = VAE(config, device).to(device)
     
     optimizer = torch.optim.Adam(
