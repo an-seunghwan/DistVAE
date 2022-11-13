@@ -22,13 +22,14 @@ class VAE(nn.Module):
         ).to(device)
         
         """spline"""
-        # self.M = 10
         self.delta = torch.arange(0, 1.1, step=0.1).view(1, -1).to(device)
-        self.M = self.delta.size(1)
+        self.M = self.delta.size(1) - 1
         self.spline = nn.Sequential(
-            nn.Linear(config["latent_dim"], 4),
+            nn.Linear(config["latent_dim"], 16),
             nn.ReLU(),
-            nn.Linear(4, config["input_dim"] * (1 + self.M)),
+            nn.Linear(16, 64),
+            nn.ReLU(),
+            nn.Linear(64, config["input_dim"] * (1 + (self.M + 1))),
         ).to(device)
     
     def get_posterior(self, input):
@@ -51,7 +52,7 @@ class VAE(nn.Module):
     
     def quantile_parameter(self, z):
         h = self.spline(z)
-        h = torch.split(h, 1 + self.M, dim=1)
+        h = torch.split(h, 1 + (self.M + 1), dim=1)
         
         gamma = [h_[:, [0]] for h_ in h]
         beta = [nn.Softplus()(h_[:, 1:]) for h_ in h] # positive constraint
