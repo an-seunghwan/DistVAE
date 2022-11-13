@@ -63,7 +63,7 @@ def get_args(debug):
     # optimization options
     parser.add_argument('--epochs', default=30, type=int,
                         help='maximum iteration')
-    parser.add_argument('--batch_size', default=1024, type=int,
+    parser.add_argument('--batch_size', default=512, type=int,
                         help='batch size')
     parser.add_argument('--lr', default=0.001, type=float,
                         help='learning rate')
