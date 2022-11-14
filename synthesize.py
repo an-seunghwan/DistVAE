@@ -17,6 +17,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
 from sklearn.ensemble import RandomForestRegressor
+from sklearn import metrics
 
 from modules.simulation import (
     set_random_seed
@@ -47,7 +48,7 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=8, 
+    parser.add_argument('--num', type=int, default=11, 
                         help='model version')
 
     if debug:
@@ -140,7 +141,6 @@ def main():
             return x, y
     
     dataset = TabularDataset(config)
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     test_dataset = TestTabularDataset(config)
     test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     config["input_dim"] = len(dataset.continuous)
@@ -156,27 +156,27 @@ def main():
     #%%    
     """baseline"""
     n = 1000
-    baseline_rsquare = []
+    baseline_mse = []
     for s in tqdm.tqdm(range(10), desc="Original the dataset and its performance"):
+        np.random.seed(s)
+        idx = list(np.random.choice(range(len(dataset.train)), n, replace=False))
+        
         baseline_rf = RandomForestRegressor(
             max_features='sqrt',
             random_state=0
         )
-        np.random.seed(s)
-        idx = list(np.random.choice(range(len(dataset.train)), n, replace=False))
         baseline_rf.fit(
             dataset.x_data[idx, :len(dataset.continuous)-1], 
             dataset.train[dataset.continuous[-1]].iloc[idx])
-        baseline_rsquare.append(
-            baseline_rf.score(
-                test_dataset.x_data[:, :len(dataset.continuous)-1], 
-                test_dataset.test[dataset.continuous[-1]]))
-    print("[Baseline Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(baseline_rsquare), np.std(baseline_rsquare)))
+        pred = baseline_rf.predict(test_dataset.x_data[:, :len(dataset.continuous)-1])
+        mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
+        baseline_mse.append(mse)
+    print("[Baseline Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(baseline_mse), np.std(baseline_mse)))
     #%%
     """synthesize the dataset"""
     n = 1000
-    rsquare = []
-    for s in tqdm.tqdm(range(10), desc="Synthesize the dataset and its performance"):
+    prior_mse = []
+    for s in tqdm.tqdm(range(10), desc="[Prior] Synthesize the dataset and its performance"):
         torch.manual_seed(s)
         randn = torch.randn(n, 2) # prior
         quantiles = []
@@ -193,11 +193,51 @@ def main():
             random_state=0
         )
         rf.fit(x_train_syn, y_train_syn)
-        rsquare.append(
-            rf.score(
-                test_dataset.x_data[:, :len(dataset.continuous)-1], 
-                test_dataset.test[dataset.continuous[-1]]))
-    print("[Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(rsquare), np.std(rsquare)))
+        pred = rf.predict(test_dataset.x_data[:, :len(dataset.continuous)-1])
+        mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
+        prior_mse.append(mse)
+    print("[Prior & Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(prior_mse), np.std(prior_mse)))
+    #%%
+    n = 1000
+    aggregated_mse = []
+    dataloader = DataLoader(dataset, batch_size=n, shuffle=False)
+    iter_dataloader = iter(dataloader)
+    for s in tqdm.tqdm(range(10), desc="[Aggregated] Synthesize the dataset and its performance"):
+        torch.manual_seed(s)
+        x_batch, _ = next(iter_dataloader)
+        quantiles = []
+        for k, v in enumerate(dataset.continuous):
+            alpha = torch.rand(n, 1)
+            with torch.no_grad():
+                z, _, _ = model.encode(x_batch, deterministic=False) # aggregated
+                gamma, beta = model.quantile_parameter(z)
+                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
+        x_train_syn = torch.cat(quantiles[:len(dataset.continuous)-1], axis=1).numpy()
+        y_train_syn = quantiles[len(dataset.continuous)-1].numpy()[:, 0]
+        
+        rf = RandomForestRegressor(
+            max_features='sqrt',
+            random_state=0
+        )
+        rf.fit(x_train_syn, y_train_syn)
+        pred = rf.predict(test_dataset.x_data[:, :len(dataset.continuous)-1])
+        mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
+        aggregated_mse.append(mse)
+    print("[Aggregated & Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(aggregated_mse), np.std(aggregated_mse)))
+    #%%
+    fig = plt.figure(figsize=(5, 4))
+    plt.errorbar(x=['baseline'], y=[np.mean(baseline_mse)], yerr=[np.std(baseline_mse)], 
+                 marker='o', linestyle="-")
+    plt.errorbar(x=['prior'], y=[np.mean(prior_mse)], yerr=[np.std(prior_mse)], 
+                 marker='o', linestyle="-")
+    plt.errorbar(x=['aggregated'], y=[np.mean(aggregated_mse)], yerr=[np.std(aggregated_mse)], 
+                 marker='o', linestyle="-")
+    plt.ylabel('mse', fontsize=13)
+    plt.tight_layout()
+    plt.savefig('./assets/performance.png')
+    plt.show()
+    plt.close()
+    wandb.log({'Performance comparison (MSE)': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
