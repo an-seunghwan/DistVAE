@@ -58,7 +58,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
@@ -235,7 +235,7 @@ def main():
     plt.ylabel('mse', fontsize=13)
     plt.tight_layout()
     plt.savefig('./assets/performance.png')
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'Performance comparison (MSE)': wandb.Image(fig)})
     #%%
