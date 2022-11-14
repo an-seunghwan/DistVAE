@@ -67,6 +67,8 @@ def get_args(debug):
                         help='batch size')
     parser.add_argument('--lr', default=0.001, type=float,
                         help='learning rate')
+    parser.add_argument('--threshold', default=0.00001, type=float,
+                        help='threshold for clipping alpha_tilde')
     
     # loss coefficients
     parser.add_argument('--beta', default=1, type=float,
