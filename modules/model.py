@@ -82,12 +82,24 @@ def main():
     
     z, mean, logvar, gamma, beta = model(batch)
     
+    j = 0
+    delta_ = model.delta.unsqueeze(2).repeat(1, 1, model.M + 1)
+    delta_ = torch.where(delta_ - model.delta > 0,
+                        delta_ - model.delta,
+                        torch.zeros(()))
+    mask1 = gamma[j] + (beta[j] * delta_.unsqueeze(2)).sum(axis=-1).squeeze(0).t()
+    
+    mask2 = [model.quantile_function(d, gamma, beta, j) for d in model.delta[0]]
+    mask2 = torch.cat(mask2, axis=1)
+    
+    assert (mask1 - mask2).sum().item() == 0
+    
     assert z.shape == (10, config["latent_dim"])
     assert mean.shape == (10, config["latent_dim"])
     assert logvar.shape == (10, config["latent_dim"])
     assert gamma[0].shape == (10, 1)
     assert len(gamma) == config["input_dim"]
-    assert beta[0].shape == (10, model.M)
+    assert beta[0].shape == (10, model.M + 1)
     assert len(beta) == config["input_dim"]
     
     print("Model pass test!")
