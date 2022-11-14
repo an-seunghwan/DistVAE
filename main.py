@@ -65,9 +65,9 @@ def get_args(debug):
                         help='maximum iteration')
     parser.add_argument('--batch_size', default=1024, type=int,
                         help='batch size')
-    parser.add_argument('--lr', default=0.001, type=float,
+    parser.add_argument('--lr', default=1e-3, type=float,
                         help='learning rate')
-    parser.add_argument('--threshold', default=0.00001, type=float,
+    parser.add_argument('--threshold', default=1e-5, type=float,
                         help='threshold for clipping alpha_tilde')
     
     # loss coefficients

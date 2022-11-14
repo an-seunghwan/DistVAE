@@ -7,7 +7,7 @@ metric:
   name: loss
 parameters:
   num:
-    values: [4, 5, 6, 7]
+    values: [8, 9, 10, 11, 12]
   # beta:
   #   values: [0.1, 1]
   # lr:
