@@ -47,7 +47,7 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=3, 
+    parser.add_argument('--num', type=int, default=8, 
                         help='model version')
 
     if debug:
@@ -179,9 +179,9 @@ def main():
     for s in tqdm.tqdm(range(10), desc="Synthesize the dataset and its performance"):
         torch.manual_seed(s)
         randn = torch.randn(n, 2) # prior
-        alpha = torch.rand(n, 1)
         quantiles = []
         for k, v in enumerate(dataset.continuous):
+            alpha = torch.rand(n, 1)
             with torch.no_grad():
                 gamma, beta = model.quantile_parameter(randn)
                 quantiles.append(model.quantile_function(alpha, gamma, beta, k))

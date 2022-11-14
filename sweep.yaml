@@ -1,11 +1,14 @@
 project: VAE(CRPS)
-program: main.py
+# program: main.py
+program: inference.py
 method: grid
 metric:
   goal: minimize
   name: loss
 parameters:
-  beta:
-    values: [0.1, 1]
-  lr:
-    values: [0.001, 0.01]
+  num:
+    values: [6, 7, 8, 9, 10, 11]
+  # beta:
+  #   values: [0.1, 1]
+  # lr:
+  #   values: [0.001, 0.01]

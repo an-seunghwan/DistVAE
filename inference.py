@@ -55,7 +55,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
@@ -180,7 +180,7 @@ def main():
         ax.view_init(30, 60)
         plt.tight_layout()
         plt.savefig('./assets/latent_quantile/latent_quantile_{}.png'.format(j))
-        plt.show()
+        # plt.show()
         plt.close()
         wandb.log({'latent space ~ quantile': wandb.Image(fig)})
     #%%
@@ -203,7 +203,7 @@ def main():
     plt.ylabel('$z_2$', fontsize=14)
     plt.tight_layout()
     plt.savefig('./assets/latent.png')
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'latent space': wandb.Image(fig)})
     #%%
@@ -216,7 +216,7 @@ def main():
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
     plt.savefig('./assets/empirical_quantile.png')
-    plt.show()
+    # plt.show()
     plt.close()
     #%%
     """estimated quantile plot"""
@@ -238,7 +238,7 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/prior_estimated_quantile.png')
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (prior)': wandb.Image(fig)})
     #%%
@@ -260,7 +260,7 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/aggregated_estimated_quantile.png')
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
     #%%
