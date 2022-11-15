@@ -38,7 +38,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Inference"],
+    tags=["Credit", "Inference", "v2"],
 )
 #%%
 import argparse
@@ -263,9 +263,6 @@ def main():
     # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
-    #%%
-    """synthesize the dataset"""
-    
     #%%
     wandb.run.finish()
 #%%
