@@ -40,7 +40,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit"],
+    tags=["Credit", "v2"],
 )
 #%%
 import argparse
@@ -65,7 +65,7 @@ def get_args(debug):
                         help='maximum iteration')
     parser.add_argument('--batch_size', default=1024, type=int,
                         help='batch size')
-    parser.add_argument('--lr', default=1e-2, type=float,
+    parser.add_argument('--lr', default=1e-3, type=float,
                         help='learning rate')
     parser.add_argument('--threshold', default=1e-5, type=float,
                         help='threshold for clipping alpha_tilde')
@@ -136,10 +136,10 @@ def main():
         model.parameters(), 
         lr=config["lr"]
     )
-    # learning rate schedule
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer=optimizer,
-        lr_lambda=lambda epoch: 0.95 ** epoch)
+    # # learning rate schedule
+    # scheduler = torch.optim.lr_scheduler.LambdaLR(
+    #     optimizer=optimizer,
+    #     lr_lambda=lambda epoch: 0.95 ** epoch)
     #%%
     model.train()
     
@@ -153,7 +153,7 @@ def main():
         """update log"""
         wandb.log({x : np.mean(y) for x, y in logs.items()})
         
-        scheduler.step() # update learning rate
+        # scheduler.step() # update learning rate
     #%%
     """model save"""
     torch.save(model.state_dict(), './assets/model_credit.pth')
