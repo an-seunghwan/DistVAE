@@ -61,9 +61,9 @@ def get_args(debug):
                         help="the number of latent codes")
     
     # optimization options
-    parser.add_argument('--epochs', default=100, type=int,
+    parser.add_argument('--epochs', default=50, type=int,
                         help='maximum iteration')
-    parser.add_argument('--batch_size', default=1024, type=int,
+    parser.add_argument('--batch_size', default=256, type=int,
                         help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float,
                         help='learning rate')
