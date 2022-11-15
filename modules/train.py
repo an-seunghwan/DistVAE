@@ -17,11 +17,10 @@ def train_VAE(dataloader, model, config, optimizer, device):
     for i in range(config["latent_dim"]):
         logs['posterior_variance{}'.format(i+1)] = []
     
-    for (x_batch, _) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
+    for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
         
         if config["cuda"]:
             x_batch = x_batch.cuda()
-            # y_batch = y_batch.cuda()
         
         # with torch.autograd.set_detect_anomaly(True):    
         optimizer.zero_grad()

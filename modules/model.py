@@ -24,8 +24,7 @@ class VAE(nn.Module):
         """spline"""
         # self.delta = torch.arange(0, 1.1, step=0.1).view(1, -1).to(device)
         self.delta = torch.cat([torch.arange(0, 0.1, 0.02),
-                                torch.arange(0.1, 0.9, step=0.1),
-                                torch.arange(0.9, 1.02, 0.02)]).view(1, -1).to(device)
+                                torch.arange(0.1, 1.1, step=0.1)]).view(1, -1).to(device)
         self.M = self.delta.size(1) - 1
         self.spline = nn.Sequential(
             nn.Linear(config["latent_dim"], 16),

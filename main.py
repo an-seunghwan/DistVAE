@@ -98,14 +98,12 @@ def main():
             Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
             """
             df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True)
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:50000]
             continuous = [x for x in df.columns if x != 'Class']
-            self.y_data = df["Class"].to_numpy()[:int(len(df) * 0.8), None]
             df = df[continuous]
             self.continuous = continuous
             
             train = df.iloc[:int(len(df) * 0.8)]
-            # test = df.iloc[int(len(df) * 0.8):]
             
             # scaling
             mean = train.mean(axis=0)
@@ -116,15 +114,12 @@ def main():
             self.train = train
             self.x_data = train.to_numpy()
             
-            # test = (test - mean) / std
-
         def __len__(self): 
             return len(self.x_data)
 
         def __getitem__(self, idx): 
             x = torch.FloatTensor(self.x_data[idx])
-            y = torch.FloatTensor(self.y_data[idx])
-            return x, y
+            return x
     
     dataset = TabularDataset(config)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
