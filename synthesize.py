@@ -58,7 +58,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
@@ -200,7 +200,7 @@ def main():
     iter_dataloader = iter(dataloader)
     for s in tqdm.tqdm(range(10), desc="[Aggregated] Synthesize the dataset and its performance"):
         torch.manual_seed(s)
-        x_batch, _ = next(iter_dataloader)
+        (x_batch) = next(iter_dataloader)
         quantiles = []
         for k, v in enumerate(dataset.continuous):
             alpha = torch.rand(n, 1)

@@ -182,10 +182,9 @@ def main():
     #%%
     """latent space"""
     latents = []
-    for (x_batch, _) in tqdm.tqdm(iter(dataloader)):
+    for (x_batch) in tqdm.tqdm(iter(dataloader)):
         if config["cuda"]:
             x_batch = x_batch.cuda()
-            # y_batch = y_batch.cuda()
         
         with torch.no_grad():
             mean, logvar = model.get_posterior(x_batch)

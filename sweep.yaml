@@ -3,12 +3,12 @@ project: VAE(CRPS)
 # program: inference.py
 program: synthesize.py
 method: grid
-metric:
-  goal: minimize
-  name: loss
+# metric:
+#   goal: minimize
+#   name: loss
 parameters:
   num:
-    values: [23, 24, 25, 26, 27]
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
   # beta:
   #   values: [0.1, 1]
   # lr:
