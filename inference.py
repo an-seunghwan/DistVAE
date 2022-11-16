@@ -38,7 +38,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Inference", "v2"],
+    tags=["Credit", "Inference", "v1"],
 )
 #%%
 import argparse
@@ -79,7 +79,7 @@ def main():
             Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
             """
             df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:50000]
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
             continuous = [x for x in df.columns if x != 'Class']
             df = df[continuous]
             self.continuous = continuous
@@ -109,7 +109,7 @@ def main():
             Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
             """
             df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:50000]
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
             continuous = [x for x in df.columns if x != 'Class']
             df = df[continuous]
             self.continuous = continuous

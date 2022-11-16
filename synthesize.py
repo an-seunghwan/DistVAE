@@ -41,14 +41,14 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Synthesize", "v2"],
+    tags=["Credit", "Synthesize", "v1"],
 )
 #%%
 import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=26, 
+    parser.add_argument('--num', type=int, default=9, 
                         help='model version')
 
     if debug:
@@ -58,7 +58,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
@@ -82,7 +82,7 @@ def main():
             Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
             """
             df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:50000]
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
             continuous = [x for x in df.columns if x != 'Class']
             df = df[continuous]
             self.continuous = continuous
@@ -112,7 +112,7 @@ def main():
             Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
             """
             df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:50000]
+            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
             continuous = [x for x in df.columns if x != 'Class']
             df = df[continuous]
             self.continuous = continuous
