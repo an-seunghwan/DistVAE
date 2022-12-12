@@ -22,20 +22,26 @@ class TabularDataset(Dataset):
         df = pd.read_csv('./data/adult.csv')
         df = df.sample(frac=1, random_state=1).reset_index(drop=True)
         df = df[(df == '?').sum(axis=1) == 0]
-        df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
+        # df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
         
         self.continuous = ['age', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
-        self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
-        df = df[self.continuous + self.discrete]
+        df = df[self.continuous]
+        # self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
+        # df = df[self.continuous + self.discrete]
         
         df = df.iloc[:40000, ]
         
-        transformer = DataTransformer()
-        transformer.fit(df, discrete_columns=self.discrete, random_state=random_state)
-        train_data = transformer.transform(df)
-        self.transformer = transformer
-        
-        self.x_data = train_data
+        if config["vgmm"]:
+            transformer = DataTransformer()
+            transformer.fit(df, random_state=random_state)
+            # transformer.fit(df, discrete_columns=self.discrete, random_state=random_state)
+            train_data = transformer.transform(df)
+            self.transformer = transformer
+            self.x_data = train_data
+        else:
+            df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
+            df[self.continuous] /= df[self.continuous].std(axis=0)
+            self.x_data = df.to_numpy()
         
     def __len__(self): 
         return len(self.x_data)
@@ -50,21 +56,27 @@ class TestTabularDataset(Dataset):
         df = pd.read_csv('./data/adult.csv')
         df = df.sample(frac=1, random_state=1).reset_index(drop=True)
         df = df[(df == '?').sum(axis=1) == 0]
-        df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
+        # df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
         
         self.continuous = ['age', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
-        self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
-        df = df[self.continuous + self.discrete]
+        df = df[self.continuous]
+        # self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
+        # df = df[self.continuous + self.discrete]
         
         df_ = df.iloc[:40000, ]
         df = df.iloc[40000:, ]
         
-        transformer = DataTransformer()
-        transformer.fit(df_, discrete_columns=self.discrete, random_state=random_state)
-        test_data = transformer.transform(df)
-        self.transformer = transformer
-        
-        self.x_data = test_data
+        if config["vgmm"]:
+            transformer = DataTransformer()
+            transformer.fit(df_, random_state=random_state)
+            # transformer.fit(df_, discrete_columns=self.discrete, random_state=random_state)
+            train_data = transformer.transform(df)
+            self.transformer = transformer
+            self.x_data = train_data
+        else:
+            df[self.continuous] = (df[self.continuous] - df_[self.continuous].mean(axis=0))
+            df[self.continuous] /= df_[self.continuous].std(axis=0)
+            self.x_data = df.to_numpy()
         
     def __len__(self): 
         return len(self.x_data)

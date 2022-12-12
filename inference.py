@@ -38,14 +38,14 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Inference", "v2"],
+    tags=["adult", "Inference"],
 )
 #%%
 import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=10, 
+    parser.add_argument('--num', type=int, default=0, 
                         help='model version')
 
     if debug:
@@ -57,10 +57,13 @@ def main():
     #%%
     config = vars(get_args(debug=True)) # default configuration
     
+    dataset = "adult"
+    
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
+    assert dataset == config["dataset"]
     model_dir = artifact.download()
     
     config["cuda"] = torch.cuda.is_available()
@@ -72,87 +75,45 @@ def main():
     if config["cuda"]:
         torch.cuda.manual_seed(config["seed"])
     #%%
-    class TabularDataset(Dataset): 
-        def __init__(self, config):
-            """
-            load dataset: Credit
-            Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
-            """
-            df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
-            continuous = [x for x in df.columns if x != 'Class']
-            df = df[continuous]
-            self.continuous = continuous
-            
-            train = df.iloc[:int(len(df) * 0.8)]
-            
-            # normalization
-            mean = train.mean(axis=0)
-            std = train.std(axis=0)
-            self.mean = mean
-            self.std = std
-            train = (train - mean) / std
-            
-            self.train = train
-            self.x_data = train.to_numpy()
-            
-        def __len__(self): 
-            return len(self.x_data)
-
-        def __getitem__(self, idx): 
-            x = torch.FloatTensor(self.x_data[idx])
-            return x
-    
-    class TestTabularDataset(Dataset): 
-        def __init__(self, config):
-            """
-            load dataset: Credit
-            Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
-            """
-            df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
-            continuous = [x for x in df.columns if x != 'Class']
-            df = df[continuous]
-            self.continuous = continuous
-            
-            train = df.iloc[:int(len(df) * 0.8)]
-            test = df.iloc[int(len(df) * 0.8):]
-            
-            # normalization
-            mean = train.mean(axis=0)
-            std = train.std(axis=0)
-            self.mean = mean
-            self.std = std
-            test = (test - mean) / std
-            
-            self.test = test
-            self.x_data = test.to_numpy()
-
-        def __len__(self): 
-            return len(self.x_data)
-
-        def __getitem__(self, idx): 
-            x = torch.FloatTensor(self.x_data[idx])
-            return x
+    import importlib
+    dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
+    TabularDataset = dataset_module.TabularDataset
+    TestTabularDataset = dataset_module.TestTabularDataset
     
     dataset = TabularDataset(config)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     test_dataset = TestTabularDataset(config)
     test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
-    config["input_dim"] = len(dataset.continuous)
+    # print(test_dataset.transformer.output_dimensions)
+    
+    if config["vgmm"]:
+        config["input_dim"] = dataset.transformer.output_dimensions
+    else:
+        config["input_dim"] = len(dataset.continuous)
+        # config["input_dim"] = len(dataset.continuous + dataset.discrete)
+    config["output_dim"] = len(dataset.continuous)
+    # config["output_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
     if config["cuda"]:
-        model.load_state_dict(torch.load(model_dir + '/model_credit.pth'))
+        model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+        model.load_state_dict(
+            torch.load(
+                model_dir + '/' + model_name))
     else:
-        model.load_state_dict(torch.load(model_dir + '/model_credit.pth', 
-                                         map_location=torch.device('cpu')))
+        model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+        model.load_state_dict(
+            torch.load(
+                model_dir + '/' + model_name, map_location=torch.device('cpu')))
     
     model.eval()
     #%%    
+    if not os.path.exists('./assets/{}'.format(config["dataset"])):
+        os.makedirs('./assets/{}'.format(config["dataset"]))
+    
     """3D visualization of quantile function"""
-    if not os.path.exists("./assets/latent_quantile"): 
-        os.makedirs("./assets/latent_quantile")
+    if not os.path.exists("./assets/{}/latent_quantile".format(config["dataset"])): 
+        os.makedirs("./assets/{}/latent_quantile".format(config["dataset"]))
             
     xs = torch.linspace(-2, 2, steps=30)
     ys = torch.linspace(-2, 2, steps=30)
@@ -177,7 +138,7 @@ def main():
             ax.set_zlabel('{}'.format(dataset.continuous[j]), fontsize=14)
         ax.view_init(30, 60)
         plt.tight_layout()
-        plt.savefig('./assets/latent_quantile/latent_quantile_{}.png'.format(j))
+        plt.savefig('./assets/{}/latent_quantile/latent_quantile_{}.png'.format(config["dataset"], j))
         # plt.show()
         plt.close()
         wandb.log({'latent space ~ quantile': wandb.Image(fig)})
@@ -193,26 +154,26 @@ def main():
         latents.append(mean)
     latents = torch.cat(latents, axis=0)
     
-    fig = plt.figure(figsize=(5, 5))
+    fig = plt.figure(figsize=(3, 3))
     plt.scatter(latents[:, 0], latents[:, 1], 
                 alpha=0.7, s=1)
     plt.xlabel('$z_1$', fontsize=14)
     plt.ylabel('$z_2$', fontsize=14)
     plt.tight_layout()
-    plt.savefig('./assets/latent.png')
+    plt.savefig('./assets/{}/latent.png'.format(config["dataset"]))
     # plt.show()
     plt.close()
     wandb.log({'latent space': wandb.Image(fig)})
     #%%
     """Empirical quantile plot"""
     q = np.arange(0.01, 0.99, 0.01)
-    fig, ax = plt.subplots(5, 6, figsize=(12, 10))
+    fig, ax = plt.subplots(1, 5, figsize=(10, 2))
     for k, v in enumerate(dataset.continuous):
         ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q))
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
-    plt.savefig('./assets/empirical_quantile.png')
+    plt.savefig('./assets/{}/empirical_quantile.png'.format(config["dataset"]))
     # plt.show()
     plt.close()
     #%%
@@ -221,7 +182,7 @@ def main():
     q = np.arange(0.01, 0.99, 0.01)
     j = 0
     randn = torch.randn(n, 2) # prior
-    fig, ax = plt.subplots(6, 5, figsize=(10, 12))
+    fig, ax = plt.subplots(1, 5, figsize=(10, 2))
     for k, v in enumerate(dataset.continuous):
         quantiles = []
         for alpha in q:
@@ -234,7 +195,7 @@ def main():
         ax.flatten()[k].set_ylabel(v)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('./assets/prior_estimated_quantile.png')
+    plt.savefig('./assets/{}/prior_estimated_quantile.png'.format(config["dataset"]))
     # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (prior)': wandb.Image(fig)})
@@ -243,7 +204,7 @@ def main():
     q = np.arange(0.01, 0.99, 0.01)
     j = 0
     idx = np.random.choice(range(len(latents)), n, replace=False)
-    fig, ax = plt.subplots(6, 5, figsize=(10, 12))
+    fig, ax = plt.subplots(1, 5, figsize=(10, 2))
     for k, v in enumerate(dataset.continuous):
         quantiles = []
         for alpha in q:
@@ -256,7 +217,7 @@ def main():
         ax.flatten()[k].set_ylabel(v)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('./assets/aggregated_estimated_quantile.png')
+    plt.savefig('./assets/{}/aggregated_estimated_quantile.png'.format(config["dataset"]))
     # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})

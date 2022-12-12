@@ -25,7 +25,7 @@ def train_VAE(dataloader, model, config, optimizer, device):
         # with torch.autograd.set_detect_anomaly(True):    
         optimizer.zero_grad()
         
-        z, mean, logvar, gamma, beta = model(x_batch.tanh())
+        z, mean, logvar, gamma, beta = model(x_batch)
         
         loss_ = []
         

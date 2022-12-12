@@ -40,7 +40,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "v2"],
+    tags=["adult"],
 )
 #%%
 import argparse
@@ -57,8 +57,13 @@ def get_args(debug):
     
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
+    parser.add_argument('--dataset', type=str, default='adult', 
+                        help='Dataset options: loan, adult, covtype')
+    
     parser.add_argument("--latent_dim", default=2, type=int,
                         help="the number of latent codes")
+    parser.add_argument("--vgmm", default=False, action="store_true",
+                        help="Whether to use VGMM to pre-processing")
     
     # optimization options
     parser.add_argument('--epochs', default=100, type=int,
@@ -91,40 +96,23 @@ def main():
     if config["cuda"]:
         torch.cuda.manual_seed(config["seed"])
     #%%
-    class TabularDataset(Dataset): 
-        def __init__(self, config):
-            """
-            load dataset: Credit
-            Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
-            """
-            df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
-            continuous = [x for x in df.columns if x != 'Class']
-            df = df[continuous]
-            self.continuous = continuous
-            
-            train = df.iloc[:int(len(df) * 0.8)]
-            
-            # normalization
-            mean = train.mean(axis=0)
-            std = train.std(axis=0)
-            self.mean = mean
-            self.std = std
-            train = (train - mean) / std
-            
-            self.train = train
-            self.x_data = train.to_numpy()
-            
-        def __len__(self): 
-            return len(self.x_data)
-
-        def __getitem__(self, idx): 
-            x = torch.FloatTensor(self.x_data[idx])
-            return x
+    import importlib
+    dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
+    TabularDataset = dataset_module.TabularDataset
+    # TestTabularDataset = dataset_module.TestTabularDataset
     
     dataset = TabularDataset(config)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    config["input_dim"] = len(dataset.continuous)
+    # test_dataset = TestTabularDataset(config)
+    # print(test_dataset.transformer.output_dimensions)
+    
+    if config["vgmm"]:
+        config["input_dim"] = dataset.transformer.output_dimensions
+    else:
+        config["input_dim"] = len(dataset.continuous)
+        # config["input_dim"] = len(dataset.continuous + dataset.discrete)
+    config["output_dim"] = len(dataset.continuous)
+    # config["output_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
     
@@ -152,11 +140,11 @@ def main():
         # scheduler.step() # update learning rate
     #%%
     """model save"""
-    torch.save(model.state_dict(), './assets/model_credit.pth')
-    artifact = wandb.Artifact('model_credit', 
+    torch.save(model.state_dict(), './assets/model_{}.pth'.format(config["dataset"]))
+    artifact = wandb.Artifact('model_{}'.format(config["dataset"]), 
                             type='model',
                             metadata=config) # description=""
-    artifact.add_file('./assets/model_credit.pth')
+    artifact.add_file('./assets/model_{}.pth'.format(config["dataset"]))
     artifact.add_file('./main.py')
     artifact.add_file('./modules/model.py')
     wandb.log_artifact(artifact)
