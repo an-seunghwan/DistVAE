@@ -38,14 +38,14 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Inference", "v1"],
+    tags=["Credit", "Inference", "v2"],
 )
 #%%
 import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=3, 
+    parser.add_argument('--num', type=int, default=10, 
                         help='model version')
 
     if debug:
@@ -55,7 +55,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
@@ -86,12 +86,13 @@ def main():
             
             train = df.iloc[:int(len(df) * 0.8)]
             
-            # scaling
+            # normalization
             mean = train.mean(axis=0)
             std = train.std(axis=0)
             self.mean = mean
             self.std = std
             train = (train - mean) / std
+            
             self.train = train
             self.x_data = train.to_numpy()
             
@@ -117,12 +118,13 @@ def main():
             train = df.iloc[:int(len(df) * 0.8)]
             test = df.iloc[int(len(df) * 0.8):]
             
-            # scaling
+            # normalization
             mean = train.mean(axis=0)
             std = train.std(axis=0)
             self.mean = mean
             self.std = std
             test = (test - mean) / std
+            
             self.test = test
             self.x_data = test.to_numpy()
 
@@ -187,7 +189,7 @@ def main():
             x_batch = x_batch.cuda()
         
         with torch.no_grad():
-            mean, logvar = model.get_posterior(x_batch)
+            mean, logvar = model.get_posterior(x_batch.tanh())
         latents.append(mean)
     latents = torch.cat(latents, axis=0)
     
@@ -206,7 +208,7 @@ def main():
     q = np.arange(0.01, 0.99, 0.01)
     fig, ax = plt.subplots(5, 6, figsize=(12, 10))
     for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q))
+        ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q))
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
@@ -226,7 +228,7 @@ def main():
             with torch.no_grad():
                 gamma, beta = model.quantile_parameter(randn)
                 quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
+        ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q), label="empirical")
         ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="prior")
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
@@ -248,7 +250,7 @@ def main():
             with torch.no_grad():
                 gamma, beta = model.quantile_parameter(latents[idx, :]) # aggregated
                 quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
+        ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q), label="empirical")
         ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="aggregated")
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)

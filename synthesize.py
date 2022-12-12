@@ -41,14 +41,14 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Synthesize", "v1"],
+    tags=["Credit", "Synthesize", "v2"],
 )
 #%%
 import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=9, 
+    parser.add_argument('--num', type=int, default=10, 
                         help='model version')
 
     if debug:
@@ -89,12 +89,13 @@ def main():
             
             train = df.iloc[:int(len(df) * 0.8)]
             
-            # scaling
+            # normalization
             mean = train.mean(axis=0)
             std = train.std(axis=0)
             self.mean = mean
             self.std = std
             train = (train - mean) / std
+            
             self.train = train
             self.x_data = train.to_numpy()
             
@@ -120,12 +121,13 @@ def main():
             train = df.iloc[:int(len(df) * 0.8)]
             test = df.iloc[int(len(df) * 0.8):]
             
-            # scaling
+            # normalization
             mean = train.mean(axis=0)
             std = train.std(axis=0)
             self.mean = mean
             self.std = std
             test = (test - mean) / std
+            
             self.test = test
             self.x_data = test.to_numpy()
 
@@ -162,9 +164,9 @@ def main():
             random_state=0
         )
         baseline_rf.fit(
-            dataset.x_data[idx, :len(dataset.continuous)-1], 
+            np.tanh(dataset.x_data[idx, :len(dataset.continuous)-1]), 
             dataset.train[dataset.continuous[-1]].iloc[idx])
-        pred = baseline_rf.predict(test_dataset.x_data[:, :len(dataset.continuous)-1])
+        pred = baseline_rf.predict(np.tanh(test_dataset.x_data[:, :len(dataset.continuous)-1]))
         mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
         baseline_mse.append(mse)
     print("[Baseline Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(baseline_mse), np.std(baseline_mse)))
@@ -189,7 +191,7 @@ def main():
             random_state=0
         )
         rf.fit(x_train_syn, y_train_syn)
-        pred = rf.predict(test_dataset.x_data[:, :len(dataset.continuous)-1])
+        pred = rf.predict(np.tanh(test_dataset.x_data[:, :len(dataset.continuous)-1]))
         mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
         prior_mse.append(mse)
     print("[Prior & Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(prior_mse), np.std(prior_mse)))
@@ -205,7 +207,7 @@ def main():
         for k, v in enumerate(dataset.continuous):
             alpha = torch.rand(n, 1)
             with torch.no_grad():
-                z, _, _ = model.encode(x_batch, deterministic=False) # aggregated
+                z, _, _ = model.encode(x_batch.tanh(), deterministic=False) # aggregated
                 gamma, beta = model.quantile_parameter(z)
                 quantiles.append(model.quantile_function(alpha, gamma, beta, k))
         x_train_syn = torch.cat(quantiles[:len(dataset.continuous)-1], axis=1).numpy()
@@ -216,7 +218,7 @@ def main():
             random_state=0
         )
         rf.fit(x_train_syn, y_train_syn)
-        pred = rf.predict(test_dataset.x_data[:, :len(dataset.continuous)-1])
+        pred = rf.predict(np.tanh(test_dataset.x_data[:, :len(dataset.continuous)-1]))
         mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
         aggregated_mse.append(mse)
     print("[Aggregated & Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(aggregated_mse), np.std(aggregated_mse)))

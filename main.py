@@ -40,7 +40,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "v1"],
+    tags=["Credit", "v2"],
 )
 #%%
 import argparse
@@ -71,7 +71,7 @@ def get_args(debug):
                         help='threshold for clipping alpha_tilde')
     
     # loss coefficients
-    parser.add_argument('--beta', default=1, type=float,
+    parser.add_argument('--beta', default=0.1, type=float,
                         help='observation noise')
   
     if debug:
@@ -81,7 +81,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     wandb.config.update(config)
@@ -105,12 +105,13 @@ def main():
             
             train = df.iloc[:int(len(df) * 0.8)]
             
-            # scaling
+            # normalization
             mean = train.mean(axis=0)
             std = train.std(axis=0)
             self.mean = mean
             self.std = std
             train = (train - mean) / std
+            
             self.train = train
             self.x_data = train.to_numpy()
             
