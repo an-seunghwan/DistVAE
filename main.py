@@ -16,13 +16,9 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
-from modules.simulation import (
-    set_random_seed
-)
+from modules.simulation import set_random_seed
 
-from modules.model import (
-    VAE
-)
+from modules.model import VAE
 
 from modules.train import train_VAE
 #%%
@@ -40,7 +36,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["adult"],
+    # tags=[],
 )
 #%%
 import argparse
@@ -57,11 +53,13 @@ def get_args(debug):
     
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
-    parser.add_argument('--dataset', type=str, default='adult', 
+    parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: loan, adult, covtype')
     
     parser.add_argument("--latent_dim", default=2, type=int,
                         help="the number of latent codes")
+    parser.add_argument("--step", default=0.1, type=float,
+                        help="interval size of quantile levels")
     parser.add_argument("--vgmm", default=False, action="store_true",
                         help="Whether to use VGMM to pre-processing")
     
@@ -86,7 +84,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     wandb.config.update(config)
@@ -111,7 +109,7 @@ def main():
     else:
         config["input_dim"] = len(dataset.continuous)
         # config["input_dim"] = len(dataset.continuous + dataset.discrete)
-    config["output_dim"] = len(dataset.continuous)
+    # config["output_dim"] = len(dataset.continuous)
     # config["output_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
@@ -124,9 +122,8 @@ def main():
     # scheduler = torch.optim.lr_scheduler.LambdaLR(
     #     optimizer=optimizer,
     #     lr_lambda=lambda epoch: 0.95 ** epoch)
-    #%%
     model.train()
-    
+    #%%
     for epoch in range(config["epochs"]):
         logs = train_VAE(dataloader, model, config, optimizer, device)
         

@@ -16,13 +16,9 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
-from modules.simulation import (
-    set_random_seed
-)
+from modules.simulation import set_random_seed
 
-from modules.model import (
-    VAE
-)
+from modules.model import VAE
 #%%
 import sys
 import subprocess
@@ -38,7 +34,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["adult", "Inference"],
+    tags=["Inference"],
 )
 #%%
 import argparse
@@ -55,9 +51,10 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
-    dataset = "adult"
+    # dataset = "adult"
+    dataset = "covtype"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -91,7 +88,7 @@ def main():
     else:
         config["input_dim"] = len(dataset.continuous)
         # config["input_dim"] = len(dataset.continuous + dataset.discrete)
-    config["output_dim"] = len(dataset.continuous)
+    # config["output_dim"] = len(dataset.continuous)
     # config["output_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
@@ -111,37 +108,37 @@ def main():
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
         os.makedirs('./assets/{}'.format(config["dataset"]))
     
-    """3D visualization of quantile function"""
-    if not os.path.exists("./assets/{}/latent_quantile".format(config["dataset"])): 
-        os.makedirs("./assets/{}/latent_quantile".format(config["dataset"]))
+    # """3D visualization of quantile function"""
+    # if not os.path.exists("./assets/{}/latent_quantile".format(config["dataset"])): 
+    #     os.makedirs("./assets/{}/latent_quantile".format(config["dataset"]))
             
-    xs = torch.linspace(-2, 2, steps=30)
-    ys = torch.linspace(-2, 2, steps=30)
-    x, y = torch.meshgrid(xs, ys)
-    grid_z = torch.cat([x.flatten()[:, None], y.flatten()[:, None]], axis=1)
+    # xs = torch.linspace(-2, 2, steps=30)
+    # ys = torch.linspace(-2, 2, steps=30)
+    # x, y = torch.meshgrid(xs, ys)
+    # grid_z = torch.cat([x.flatten()[:, None], y.flatten()[:, None]], axis=1)
     
-    j = 1
-    alpha = 0.5
-    for j in range(config["input_dim"]):
-        quantiles = []
-        for alpha in np.linspace(0.1, 0.9, 9):
-            with torch.no_grad():
-                gamma, beta = model.quantile_parameter(grid_z)
-                quantiles.append(model.quantile_function(alpha, gamma, beta, j))
+    # j = 1
+    # alpha = 0.5
+    # for j in range(config["input_dim"]):
+    #     quantiles = []
+    #     for alpha in np.linspace(0.1, 0.9, 9):
+    #         with torch.no_grad():
+    #             gamma, beta = model.quantile_parameter(grid_z)
+    #             quantiles.append(model.quantile_function(alpha, gamma, beta, j))
         
-        fig = plt.figure(figsize=(6, 4))
-        ax = fig.gca(projection='3d')
-        for i in range(len(quantiles)):
-            ax.plot_surface(x.numpy(), y.numpy(), quantiles[i].reshape(x.shape).numpy())
-            ax.set_xlabel('$z_1$', fontsize=14)
-            ax.set_ylabel('$z_2$', fontsize=14)
-            ax.set_zlabel('{}'.format(dataset.continuous[j]), fontsize=14)
-        ax.view_init(30, 60)
-        plt.tight_layout()
-        plt.savefig('./assets/{}/latent_quantile/latent_quantile_{}.png'.format(config["dataset"], j))
-        # plt.show()
-        plt.close()
-        wandb.log({'latent space ~ quantile': wandb.Image(fig)})
+    #     fig = plt.figure(figsize=(6, 4))
+    #     ax = fig.gca(projection='3d')
+    #     for i in range(len(quantiles)):
+    #         ax.plot_surface(x.numpy(), y.numpy(), quantiles[i].reshape(x.shape).numpy())
+    #         ax.set_xlabel('$z_1$', fontsize=14)
+    #         ax.set_ylabel('$z_2$', fontsize=14)
+    #         ax.set_zlabel('{}'.format(dataset.continuous[j]), fontsize=14)
+    #     ax.view_init(30, 60)
+    #     plt.tight_layout()
+    #     plt.savefig('./assets/{}/latent_quantile/latent_quantile_{}.png'.format(config["dataset"], j))
+    #     # plt.show()
+    #     plt.close()
+    #     wandb.log({'latent space ~ quantile': wandb.Image(fig)})
     #%%
     """latent space"""
     latents = []
@@ -150,24 +147,24 @@ def main():
             x_batch = x_batch.cuda()
         
         with torch.no_grad():
-            mean, logvar = model.get_posterior(x_batch.tanh())
+            mean, logvar = model.get_posterior(x_batch)
         latents.append(mean)
     latents = torch.cat(latents, axis=0)
     
-    fig = plt.figure(figsize=(3, 3))
-    plt.scatter(latents[:, 0], latents[:, 1], 
-                alpha=0.7, s=1)
-    plt.xlabel('$z_1$', fontsize=14)
-    plt.ylabel('$z_2$', fontsize=14)
-    plt.tight_layout()
-    plt.savefig('./assets/{}/latent.png'.format(config["dataset"]))
-    # plt.show()
-    plt.close()
-    wandb.log({'latent space': wandb.Image(fig)})
+    # fig = plt.figure(figsize=(3, 3))
+    # plt.scatter(latents[:, 0], latents[:, 1], 
+    #             alpha=0.7, s=1)
+    # plt.xlabel('$z_1$', fontsize=14)
+    # plt.ylabel('$z_2$', fontsize=14)
+    # plt.tight_layout()
+    # plt.savefig('./assets/{}/latent.png'.format(config["dataset"]))
+    # # plt.show()
+    # plt.close()
+    # wandb.log({'latent space': wandb.Image(fig)})
     #%%
     """Empirical quantile plot"""
     q = np.arange(0.01, 0.99, 0.01)
-    fig, ax = plt.subplots(1, 5, figsize=(10, 2))
+    fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
     for k, v in enumerate(dataset.continuous):
         ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q))
         ax.flatten()[k].set_xlabel('alpha')
@@ -181,8 +178,8 @@ def main():
     n = 100
     q = np.arange(0.01, 0.99, 0.01)
     j = 0
-    randn = torch.randn(n, 2) # prior
-    fig, ax = plt.subplots(1, 5, figsize=(10, 2))
+    randn = torch.randn(n, config["latent_dim"]) # prior
+    fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
     for k, v in enumerate(dataset.continuous):
         quantiles = []
         for alpha in q:
@@ -204,7 +201,7 @@ def main():
     q = np.arange(0.01, 0.99, 0.01)
     j = 0
     idx = np.random.choice(range(len(latents)), n, replace=False)
-    fig, ax = plt.subplots(1, 5, figsize=(10, 2))
+    fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
     for k, v in enumerate(dataset.continuous):
         quantiles = []
         for alpha in q:
