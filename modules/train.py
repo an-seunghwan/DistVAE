@@ -14,8 +14,7 @@ def train_VAE(dataloader, model, config, optimizer, device):
         'KL': [],
     }
     # for debugging
-    for i in range(config["latent_dim"]):
-        logs['posterior_variance{}'.format(i+1)] = []
+    logs['activated'] = []
     
     for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
         
@@ -75,8 +74,7 @@ def train_VAE(dataloader, model, config, optimizer, device):
         
         ### posterior variance: for debugging
         var_ = torch.exp(logvar).mean(axis=0)
-        for i in range(config["latent_dim"]):
-            loss_.append(('posterior_variance{}'.format(i+1), var_[i]))
+        loss_.append(('activated', (var_ < 0.1).sum()))
         
         loss = total_loss + config["beta"] * KL 
         loss_.append(('loss', loss))
