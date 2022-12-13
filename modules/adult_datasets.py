@@ -29,7 +29,7 @@ class TabularDataset(Dataset):
         # self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
         # df = df[self.continuous + self.discrete]
         
-        df = df.iloc[:40000, ]
+        df = df.iloc[:40000]
         
         if config["vgmm"]:
             transformer = DataTransformer()
@@ -63,8 +63,8 @@ class TestTabularDataset(Dataset):
         # self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
         # df = df[self.continuous + self.discrete]
         
-        df_ = df.iloc[:40000, ]
-        df = df.iloc[40000:, ]
+        df_ = df.iloc[:40000]
+        df = df.iloc[40000:]
         
         if config["vgmm"]:
             transformer = DataTransformer()
