@@ -171,19 +171,19 @@ def main():
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
     plt.savefig('./assets/{}/empirical_quantile.png'.format(config["dataset"]))
-    plt.show()
+    # plt.show()
     plt.close()
     #%%
     """Quantile Estimation with sampling mechanism"""
+    n = 100
     x_linspace = np.linspace(
         [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
         [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
-        100)
+        n)
     x_linspace = torch.from_numpy(x_linspace)
     
-    n = 100
     alpha_hat = torch.zeros((n, len(dataset.continuous)))
-    for _ in range(100):
+    for _ in range(n):
         randn = torch.randn(n, config["latent_dim"]) # prior
         with torch.no_grad():
             gamma, beta = model.quantile_parameter(randn)
@@ -200,7 +200,7 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/{}/sampling_estimated_quantile.png'.format(config["dataset"]))
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (sampling mechanism)': wandb.Image(fig)})
     #%%
