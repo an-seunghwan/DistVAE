@@ -63,6 +63,9 @@ def main():
     assert dataset == config["dataset"]
     model_dir = artifact.download()
     
+    if not os.path.exists('./assets/{}'.format(config["dataset"])):
+        os.makedirs('./assets/{}'.format(config["dataset"]))
+    
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     wandb.config.update(config)
@@ -105,9 +108,6 @@ def main():
     
     model.eval()
     #%%    
-    if not os.path.exists('./assets/{}'.format(config["dataset"])):
-        os.makedirs('./assets/{}'.format(config["dataset"]))
-    
     # """3D visualization of quantile function"""
     # if not os.path.exists("./assets/{}/latent_quantile".format(config["dataset"])): 
     #     os.makedirs("./assets/{}/latent_quantile".format(config["dataset"]))
@@ -166,7 +166,7 @@ def main():
     q = np.arange(0.01, 0.99, 0.01)
     fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
     for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q))
+        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q))
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
@@ -175,7 +175,7 @@ def main():
     plt.close()
     #%%
     """estimated quantile plot"""
-    n = 100
+    n = 1000
     q = np.arange(0.01, 0.99, 0.01)
     j = 0
     randn = torch.randn(n, config["latent_dim"]) # prior
@@ -186,7 +186,7 @@ def main():
             with torch.no_grad():
                 gamma, beta = model.quantile_parameter(randn)
                 quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q), label="empirical")
+        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
         ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="prior")
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
@@ -208,7 +208,7 @@ def main():
             with torch.no_grad():
                 gamma, beta = model.quantile_parameter(latents[idx, :]) # aggregated
                 quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        ax.flatten()[k].plot(q, np.quantile(np.tanh(dataset.x_data[:, k]), q=q), label="empirical")
+        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
         ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="aggregated")
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
