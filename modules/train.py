@@ -29,24 +29,25 @@ def train_VAE(dataloader, model, config, optimizer, device):
         loss_ = []
         
         """alpha_tilde"""
-        j = 0
-        alpha_tilde_list = []
-        for j in range(config["input_dim"]):
-            delta_ = model.delta.unsqueeze(2).repeat(1, 1, model.M + 1)
-            delta_ = torch.where(delta_ - model.delta > 0,
-                                delta_ - model.delta,
-                                torch.zeros(()).to(device))
-            mask = gamma[j] + (beta[j] * delta_.unsqueeze(2)).sum(axis=-1).squeeze(0).t()
-            # mask = [model.quantile_function(d, gamma, beta, j) for d in model.delta[0]]
-            # mask = torch.cat(mask, axis=1)
-            mask = torch.where(mask <= x_batch[:, [j]], 
-                            mask, 
-                            torch.zeros(()).to(device)).type(torch.bool).type(torch.float)
-            alpha_tilde = x_batch[:, [j]] - gamma[j]
-            alpha_tilde += (mask * beta[j] * model.delta).sum(axis=1, keepdims=True)
-            alpha_tilde /= (mask * beta[j]).sum(axis=1, keepdims=True) + 1e-6
-            alpha_tilde = torch.clip(alpha_tilde, config["threshold"], 1) # numerical stability
-            alpha_tilde_list.append(alpha_tilde)
+        alpha_tilde_list = model.quantile_inverse(x_batch, gamma, beta)
+        # j = 0
+        # alpha_tilde_list = []
+        # for j in range(config["input_dim"]):
+        #     delta_ = model.delta.unsqueeze(2).repeat(1, 1, model.M + 1)
+        #     delta_ = torch.where(delta_ - model.delta > 0,
+        #                         delta_ - model.delta,
+        #                         torch.zeros(()).to(device))
+        #     mask = gamma[j] + (beta[j] * delta_.unsqueeze(2)).sum(axis=-1).squeeze(0).t()
+        #     # mask = [model.quantile_function(d, gamma, beta, j) for d in model.delta[0]]
+        #     # mask = torch.cat(mask, axis=1)
+        #     mask = torch.where(mask <= x_batch[:, [j]], 
+        #                     mask, 
+        #                     torch.zeros(()).to(device)).type(torch.bool).type(torch.float)
+        #     alpha_tilde = x_batch[:, [j]] - gamma[j]
+        #     alpha_tilde += (mask * beta[j] * model.delta).sum(axis=1, keepdims=True)
+        #     alpha_tilde /= (mask * beta[j]).sum(axis=1, keepdims=True) + 1e-6
+        #     alpha_tilde = torch.clip(alpha_tilde, config["threshold"], 1) # numerical stability
+        #     alpha_tilde_list.append(alpha_tilde)
         
         """loss"""
         j = 0

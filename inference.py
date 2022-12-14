@@ -140,16 +140,16 @@ def main():
     #     plt.close()
     #     wandb.log({'latent space ~ quantile': wandb.Image(fig)})
     #%%
-    """latent space"""
-    latents = []
-    for (x_batch) in tqdm.tqdm(iter(dataloader)):
-        if config["cuda"]:
-            x_batch = x_batch.cuda()
+    # """latent space"""
+    # latents = []
+    # for (x_batch) in tqdm.tqdm(iter(dataloader)):
+    #     if config["cuda"]:
+    #         x_batch = x_batch.cuda()
         
-        with torch.no_grad():
-            mean, logvar = model.get_posterior(x_batch)
-        latents.append(mean)
-    latents = torch.cat(latents, axis=0)
+    #     with torch.no_grad():
+    #         mean, logvar = model.get_posterior(x_batch)
+    #     latents.append(mean)
+    # latents = torch.cat(latents, axis=0)
     
     # fig = plt.figure(figsize=(3, 3))
     # plt.scatter(latents[:, 0], latents[:, 1], 
@@ -163,61 +163,90 @@ def main():
     # wandb.log({'latent space': wandb.Image(fig)})
     #%%
     """Empirical quantile plot"""
-    q = np.arange(0.01, 0.99, 0.01)
-    fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
+    q = np.arange(0.01, 1, 0.01)
+    fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(config["input_dim"], 4))
     for k, v in enumerate(dataset.continuous):
         ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q))
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
     plt.savefig('./assets/{}/empirical_quantile.png'.format(config["dataset"]))
-    # plt.show()
+    plt.show()
     plt.close()
     #%%
-    """estimated quantile plot"""
-    n = 1000
-    q = np.arange(0.01, 0.99, 0.01)
-    j = 0
-    randn = torch.randn(n, config["latent_dim"]) # prior
-    fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
-    for k, v in enumerate(dataset.continuous):
-        quantiles = []
-        for alpha in q:
-            with torch.no_grad():
-                gamma, beta = model.quantile_parameter(randn)
-                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
-        ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="prior")
-        ax.flatten()[k].set_xlabel('alpha')
-        ax.flatten()[k].set_ylabel(v)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig('./assets/{}/prior_estimated_quantile.png'.format(config["dataset"]))
-    # plt.show()
-    plt.close()
-    wandb.log({'Estimated quantile (prior)': wandb.Image(fig)})
-    #%%
+    """Quantile Estimation with sampling mechanism"""
+    x_linspace = np.linspace(
+        [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
+        [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
+        100)
+    x_linspace = torch.from_numpy(x_linspace)
+    
     n = 100
-    q = np.arange(0.01, 0.99, 0.01)
-    j = 0
-    idx = np.random.choice(range(len(latents)), n, replace=False)
-    fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
+    alpha_hat = torch.zeros((n, len(dataset.continuous)))
+    for _ in range(100):
+        randn = torch.randn(n, config["latent_dim"]) # prior
+        with torch.no_grad():
+            gamma, beta = model.quantile_parameter(randn)
+            alpha_tilde_list = model.quantile_inverse(x_linspace, gamma, beta)
+            alpha_hat += torch.cat(alpha_tilde_list, dim=1)
+    alpha_hat /= n
+    #%%
+    fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(config["input_dim"], 4))
     for k, v in enumerate(dataset.continuous):
-        quantiles = []
-        for alpha in q:
-            with torch.no_grad():
-                gamma, beta = model.quantile_parameter(latents[idx, :]) # aggregated
-                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
+        ax.flatten()[k].plot(alpha_hat[:, k], x_linspace[:, k], label="sampled")
         ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
-        ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="aggregated")
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('./assets/{}/aggregated_estimated_quantile.png'.format(config["dataset"]))
-    # plt.show()
+    plt.savefig('./assets/{}/sampling_estimated_quantile.png'.format(config["dataset"]))
+    plt.show()
     plt.close()
-    wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
+    wandb.log({'Estimated quantile (sampling mechanism)': wandb.Image(fig)})
+    #%%
+    # n = 100
+    # q = np.arange(0.01, 0.99, 0.01)
+    # j = 0
+    # randn = torch.randn(n, config["latent_dim"]) # prior
+    # fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
+    # for k, v in enumerate(dataset.continuous):
+    #     quantiles = []
+    #     for alpha in q:
+    #         with torch.no_grad():
+    #             gamma, beta = model.quantile_parameter(randn)
+    #             quantiles.append(model.quantile_function(alpha, gamma, beta, k))
+    #     ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
+    #     ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="prior")
+    #     ax.flatten()[k].set_xlabel('alpha')
+    #     ax.flatten()[k].set_ylabel(v)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig('./assets/{}/prior_estimated_quantile.png'.format(config["dataset"]))
+    # # plt.show()
+    # plt.close()
+    # wandb.log({'Estimated quantile (prior)': wandb.Image(fig)})
+    # #%%
+    # n = 100
+    # q = np.arange(0.01, 0.99, 0.01)
+    # j = 0
+    # idx = np.random.choice(range(len(latents)), n, replace=False)
+    # fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
+    # for k, v in enumerate(dataset.continuous):
+    #     quantiles = []
+    #     for alpha in q:
+    #         with torch.no_grad():
+    #             gamma, beta = model.quantile_parameter(latents[idx, :]) # aggregated
+    #             quantiles.append(model.quantile_function(alpha, gamma, beta, k))
+    #     ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
+    #     ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="aggregated")
+    #     ax.flatten()[k].set_xlabel('alpha')
+    #     ax.flatten()[k].set_ylabel(v)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig('./assets/{}/aggregated_estimated_quantile.png'.format(config["dataset"]))
+    # # plt.show()
+    # plt.close()
+    # wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
