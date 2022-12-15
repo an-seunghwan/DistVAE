@@ -125,7 +125,7 @@ def main():
     rsq_baseline = (test_dataset.test['Elevation'] - pred).pow(2).sum()
     rsq_baseline /= np.var(test_dataset.test['Elevation']) * len(test_dataset.test)
     rsq_baseline = 1 - rsq_baseline
-    print("[Baseline] R-squared: {:.2f}".format(rsq_baseline))
+    print("[Baseline] R-squared: {:.3f}".format(rsq_baseline))
     wandb.log({'R^2 (Baseline)': rsq_baseline})
     #%%
     """1. Inverse transform sampling"""
@@ -147,7 +147,7 @@ def main():
     rsq = (test_dataset.test['Elevation'] - pred).pow(2).sum()
     rsq /= np.var(test_dataset.test['Elevation']) * len(test_dataset.test)
     rsq = 1 - rsq
-    print("[Inverse transform sampling] R-squared: {:.2f}".format(rsq))
+    print("[Inverse transform sampling] R-squared: {:.3f}".format(rsq))
     wandb.log({'R^2 (Inverse transform sampling)': rsq})
     #%%
     # """2. Mean"""
