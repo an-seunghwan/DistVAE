@@ -19,13 +19,9 @@ from torch.utils.data import Dataset
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import metrics
 
-from modules.simulation import (
-    set_random_seed
-)
+from modules.simulation import set_random_seed
 
-from modules.model import (
-    VAE
-)
+from modules.model import VAE
 #%%
 import sys
 import subprocess
@@ -41,14 +37,14 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Credit", "Synthesize", "v2"],
+    tags=["Synthesize"],
 )
 #%%
 import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=10, 
+    parser.add_argument('--num', type=int, default=0, 
                         help='model version')
 
     if debug:
@@ -58,13 +54,20 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
+    
+    # dataset = "adult"
+    dataset = "covtype"
     
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_credit:v{}'.format(config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
+    assert dataset == config["dataset"]
     model_dir = artifact.download()
+    
+    if not os.path.exists('./assets/{}'.format(config["dataset"])):
+        os.makedirs('./assets/{}'.format(config["dataset"]))
     
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -75,167 +78,80 @@ def main():
     if config["cuda"]:
         torch.cuda.manual_seed(config["seed"])
     #%%
-    class TabularDataset(Dataset): 
-        def __init__(self, config):
-            """
-            load dataset: Credit
-            Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
-            """
-            df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
-            continuous = [x for x in df.columns if x != 'Class']
-            df = df[continuous]
-            self.continuous = continuous
-            
-            train = df.iloc[:int(len(df) * 0.8)]
-            
-            # normalization
-            mean = train.mean(axis=0)
-            std = train.std(axis=0)
-            self.mean = mean
-            self.std = std
-            train = (train - mean) / std
-            
-            self.train = train
-            self.x_data = train.to_numpy()
-            
-        def __len__(self): 
-            return len(self.x_data)
-
-        def __getitem__(self, idx): 
-            x = torch.FloatTensor(self.x_data[idx])
-            return x
-    
-    class TestTabularDataset(Dataset): 
-        def __init__(self, config):
-            """
-            load dataset: Credit
-            Reference: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud?resource=download
-            """
-            df = pd.read_csv('./data/creditcard.csv')
-            df = df.sample(frac=1, random_state=config["seed"]).reset_index(drop=True).iloc[:62500]
-            continuous = [x for x in df.columns if x != 'Class']
-            df = df[continuous]
-            self.continuous = continuous
-            
-            train = df.iloc[:int(len(df) * 0.8)]
-            test = df.iloc[int(len(df) * 0.8):]
-            
-            # normalization
-            mean = train.mean(axis=0)
-            std = train.std(axis=0)
-            self.mean = mean
-            self.std = std
-            test = (test - mean) / std
-            
-            self.test = test
-            self.x_data = test.to_numpy()
-
-        def __len__(self): 
-            return len(self.x_data)
-
-        def __getitem__(self, idx): 
-            x = torch.FloatTensor(self.x_data[idx])
-            return x
+    import importlib
+    dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
+    TabularDataset = dataset_module.TabularDataset
+    TestTabularDataset = dataset_module.TestTabularDataset
     
     dataset = TabularDataset(config)
+    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     test_dataset = TestTabularDataset(config)
     test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
-    config["input_dim"] = len(dataset.continuous)
+    # print(test_dataset.transformer.output_dimensions)
+    
+    if config["vgmm"]:
+        config["input_dim"] = dataset.transformer.output_dimensions
+    else:
+        config["input_dim"] = len(dataset.continuous)
+        # config["input_dim"] = len(dataset.continuous + dataset.discrete)
+    # config["output_dim"] = len(dataset.continuous)
+    # config["output_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
     if config["cuda"]:
-        model.load_state_dict(torch.load(model_dir + '/model_credit.pth'))
+        model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+        model.load_state_dict(
+            torch.load(
+                model_dir + '/' + model_name))
     else:
-        model.load_state_dict(torch.load(model_dir + '/model_credit.pth', 
-                                         map_location=torch.device('cpu')))
+        model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+        model.load_state_dict(
+            torch.load(
+                model_dir + '/' + model_name, map_location=torch.device('cpu')))
     
     model.eval()
     #%%    
+    import statsmodels.api as sm
+    from sklearn.metrics import f1_score
+    from sklearn.ensemble import RandomForestClassifier
+    #%%
     """baseline"""
-    n = 1000
-    baseline_mse = []
-    for s in tqdm.tqdm(range(10), desc="Original the dataset and its performance"):
-        np.random.seed(s)
-        idx = list(np.random.choice(range(len(dataset.train)), n, replace=False))
-        
-        baseline_rf = RandomForestRegressor(
-            max_features='sqrt',
-            random_state=0
-        )
-        baseline_rf.fit(
-            np.tanh(dataset.x_data[idx, :len(dataset.continuous)-1]), 
-            dataset.train[dataset.continuous[-1]].iloc[idx])
-        pred = baseline_rf.predict(np.tanh(test_dataset.x_data[:, :len(dataset.continuous)-1]))
-        mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
-        baseline_mse.append(mse)
-    print("[Baseline Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(baseline_mse), np.std(baseline_mse)))
+    covariates = [x for x in dataset.train.columns if x not in ['Elevation', 'Cover_Type']]
+    
+    linreg = sm.OLS(dataset.train['Elevation'], dataset.train[covariates]).fit()
+    # print(linreg.summary())
+    pred = linreg.predict(test_dataset.test[covariates])
+    
+    rsq_baseline = (test_dataset.test['Elevation'] - pred).pow(2).sum()
+    rsq_baseline /= np.var(test_dataset.test['Elevation']) * len(test_dataset.test)
+    rsq_baseline = 1 - rsq_baseline
+    print("[Baseline] R-squared: {:.2f}".format(rsq_baseline))
+    wandb.log({'R^2 (Baseline)': rsq_baseline})
     #%%
-    """synthesize the dataset"""
-    n = 1000
-    prior_mse = []
-    for s in tqdm.tqdm(range(10), desc="[Prior] Synthesize the dataset and its performance"):
-        torch.manual_seed(s)
-        randn = torch.randn(n, 2) # prior
-        quantiles = []
-        for k, v in enumerate(dataset.continuous):
-            alpha = torch.rand(n, 1)
-            with torch.no_grad():
-                gamma, beta = model.quantile_parameter(randn)
-                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        x_train_syn = torch.cat(quantiles[:len(dataset.continuous)-1], axis=1).numpy()
-        y_train_syn = quantiles[len(dataset.continuous)-1].numpy()[:, 0]
-        
-        rf = RandomForestRegressor(
-            max_features='sqrt',
-            random_state=0
-        )
-        rf.fit(x_train_syn, y_train_syn)
-        pred = rf.predict(np.tanh(test_dataset.x_data[:, :len(dataset.continuous)-1]))
-        mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
-        prior_mse.append(mse)
-    print("[Prior & Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(prior_mse), np.std(prior_mse)))
+    """1. Inverse transform sampling"""
+    n = len(dataset.train)
+    randn = torch.randn(n, config["latent_dim"]) # prior
+    quantiles = []
+    for j in range(len(dataset.continuous)):
+        alpha = torch.rand(n, 1)
+        with torch.no_grad():
+            gamma, beta = model.quantile_parameter(randn)
+            quantiles.append(model.quantile_function(alpha, gamma, beta, j))
+    quantiles = torch.cat(quantiles, dim=1).numpy()
+    ITS = pd.DataFrame(quantiles, columns=dataset.continuous)
     #%%
-    n = 1000
-    aggregated_mse = []
-    dataloader = DataLoader(dataset, batch_size=n, shuffle=False)
-    iter_dataloader = iter(dataloader)
-    for s in tqdm.tqdm(range(10), desc="[Aggregated] Synthesize the dataset and its performance"):
-        torch.manual_seed(s)
-        (x_batch) = next(iter_dataloader)
-        quantiles = []
-        for k, v in enumerate(dataset.continuous):
-            alpha = torch.rand(n, 1)
-            with torch.no_grad():
-                z, _, _ = model.encode(x_batch.tanh(), deterministic=False) # aggregated
-                gamma, beta = model.quantile_parameter(z)
-                quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-        x_train_syn = torch.cat(quantiles[:len(dataset.continuous)-1], axis=1).numpy()
-        y_train_syn = quantiles[len(dataset.continuous)-1].numpy()[:, 0]
-        
-        rf = RandomForestRegressor(
-            max_features='sqrt',
-            random_state=0
-        )
-        rf.fit(x_train_syn, y_train_syn)
-        pred = rf.predict(np.tanh(test_dataset.x_data[:, :len(dataset.continuous)-1]))
-        mse = metrics.mean_squared_error(test_dataset.test[dataset.continuous[-1]], pred)
-        aggregated_mse.append(mse)
-    print("[Aggregated & Synthesized Rsquare], mean: {:.2f}, std: {:.2f}".format(np.mean(aggregated_mse), np.std(aggregated_mse)))
+    linreg = sm.OLS(ITS['Elevation'], ITS[covariates]).fit()
+    # print(linreg.summary())
+    pred = linreg.predict(test_dataset.test[covariates])
+    
+    rsq = (test_dataset.test['Elevation'] - pred).pow(2).sum()
+    rsq /= np.var(test_dataset.test['Elevation']) * len(test_dataset.test)
+    rsq = 1 - rsq
+    print("[Inverse transform sampling] R-squared: {:.2f}".format(rsq))
+    wandb.log({'R^2 (Inverse transform sampling)': rsq})
     #%%
-    fig = plt.figure(figsize=(5, 4))
-    plt.errorbar(x=['baseline'], y=[np.mean(baseline_mse)], yerr=[np.std(baseline_mse)], 
-                 marker='o', linestyle="-")
-    plt.errorbar(x=['prior'], y=[np.mean(prior_mse)], yerr=[np.std(prior_mse)], 
-                 marker='o', linestyle="-")
-    plt.errorbar(x=['aggregated'], y=[np.mean(aggregated_mse)], yerr=[np.std(aggregated_mse)], 
-                 marker='o', linestyle="-")
-    plt.ylabel('mse', fontsize=13)
-    plt.tight_layout()
-    plt.savefig('./assets/performance.png')
-    # plt.show()
-    plt.close()
-    wandb.log({'Performance comparison (MSE)': wandb.Image(fig)})
+    # """2. Mean"""
+    # from scipy.integrate import quad
     #%%
     wandb.run.finish()
 #%%
