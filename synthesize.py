@@ -116,7 +116,7 @@ def main():
     from sklearn.ensemble import RandomForestClassifier
     #%%
     """baseline"""
-    covariates = [x for x in dataset.train.columns if x not in ['Elevation', 'Cover_Type']]
+    covariates = [x for x in dataset.train.columns if x not in ['Elevation', 'Slope', 'Cover_Type']]
     
     linreg = sm.OLS(dataset.train['Elevation'], dataset.train[covariates]).fit()
     # print(linreg.summary())
