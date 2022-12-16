@@ -18,7 +18,6 @@ Reference: https://archive.ics.uci.edu/ml/datasets/Adult
 """
 class TabularDataset(Dataset): 
     def __init__(self, config, random_state=0):
-        # if config["dataset"] == 'adult':
         df = pd.read_csv('./data/adult.csv')
         df = df.sample(frac=1, random_state=1).reset_index(drop=True)
         df = df[(df == '?').sum(axis=1) == 0]
@@ -52,7 +51,6 @@ class TabularDataset(Dataset):
 #%%
 class TestTabularDataset(Dataset): 
     def __init__(self, config, random_state=0):
-        # if config["dataset"] == 'adult':
         df = pd.read_csv('./data/adult.csv')
         df = df.sample(frac=1, random_state=1).reset_index(drop=True)
         df = df[(df == '?').sum(axis=1) == 0]

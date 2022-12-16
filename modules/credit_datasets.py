@@ -14,23 +14,24 @@ from modules.data_transformer import DataTransformer
 #%%
 class TabularDataset(Dataset): 
     def __init__(self, config, random_state=0):
-        base = pd.read_csv('./data/covtype.csv')
-        base = base.sample(frac=1, random_state=5).reset_index(drop=True)
+        base = pd.read_csv('./data/application_train.csv')
+        base = base.sample(frac=1, random_state=0).reset_index(drop=True)
         
         self.continuous = [
-            'Horizontal_Distance_To_Hydrology', 
-            'Vertical_Distance_To_Hydrology',
-            'Horizontal_Distance_To_Roadways',
-            'Horizontal_Distance_To_Fire_Points',
-            'Elevation', 
-            'Aspect', 
-            'Slope', 
-            'Cover_Type',
+            'AMT_INCOME_TOTAL', 
+            'AMT_CREDIT',
+            'AMT_ANNUITY',
+            'AMT_GOODS_PRICE',
+            'REGION_POPULATION_RELATIVE', 
+            'DAYS_BIRTH', 
+            'DAYS_EMPLOYED', 
+            'DAYS_REGISTRATION',
+            'DAYS_ID_PUBLISH',
         ]
         df = base[self.continuous]
         df = df.dropna(axis=0)
         
-        df = df.iloc[2000:]
+        df = df.iloc[:300000]
         
         if config["vgmm"]:
             transformer = DataTransformer()
@@ -54,24 +55,25 @@ class TabularDataset(Dataset):
 #%%
 class TestTabularDataset(Dataset): 
     def __init__(self, config, random_state=0):
-        base = pd.read_csv('./data/covtype.csv')
-        base = base.sample(frac=1, random_state=5).reset_index(drop=True)
+        base = pd.read_csv('./data/application_train.csv')
+        base = base.sample(frac=1, random_state=0).reset_index(drop=True)
         
         self.continuous = [
-            'Horizontal_Distance_To_Hydrology', 
-            'Vertical_Distance_To_Hydrology',
-            'Horizontal_Distance_To_Roadways',
-            'Horizontal_Distance_To_Fire_Points',
-            'Elevation', 
-            'Aspect', 
-            'Slope', 
-            'Cover_Type',
+            'AMT_INCOME_TOTAL', 
+            'AMT_CREDIT',
+            'AMT_ANNUITY',
+            'AMT_GOODS_PRICE',
+            'REGION_POPULATION_RELATIVE', 
+            'DAYS_BIRTH', 
+            'DAYS_EMPLOYED', 
+            'DAYS_REGISTRATION',
+            'DAYS_ID_PUBLISH',
         ]
         df = base[self.continuous]
         df = df.dropna(axis=0)
         
-        df_ = df.iloc[2000:]
-        df = df.iloc[:2000]
+        df_ = df.iloc[:300000]
+        df = df.iloc[300000:]
         
         if config["vgmm"]:
             transformer = DataTransformer()
