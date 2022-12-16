@@ -12,6 +12,7 @@ from torch.utils.data import Dataset
 
 from modules.data_transformer import DataTransformer
 #%%
+# https://chocoffee20.tistory.com/6
 class TabularDataset(Dataset): 
     def __init__(self, config, random_state=0):
         base = pd.read_csv('./data/application_train.csv')
