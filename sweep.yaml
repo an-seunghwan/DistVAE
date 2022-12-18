@@ -1,17 +1,20 @@
 project: VAE(CRPS)
-# program: main.py
-program: inference.py
+program: main.py
+# program: inference.py
 # program: synthesize.py
 method: grid
-# metric:
-#   goal: minimize
-#   name: loss
+metric:
+  goal: minimize
+  name: loss
 parameters:
-  num:
-    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-  # latent_dim:
-  #   values: [2, 4, 8]
-  # step:
-  #   values: [0.1, 0.05]
-  # beta:
-  #   values: [0.1, 0.01]
+  # num:
+  #   values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  dataset:
+    values: ['covtype']
+    # values: ['credit']
+  latent_dim:
+    values: [2, 4, 8]
+  beta:
+    values: [0.1, 0.01]
+  step:
+    values: [0.1, 0.05]
