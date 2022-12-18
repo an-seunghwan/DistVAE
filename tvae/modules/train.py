@@ -15,8 +15,7 @@ def train(output_info_list, dataset, dataloader, model, config, optimizer, devic
         'KL': [],
     }
     # for debugging
-    for i in range(config["node"]):
-        logs['posterior_variance{}'.format(i+1)] = []
+    logs['activated'] = []
     
     for (x_batch, ) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
         
@@ -53,15 +52,14 @@ def train(output_info_list, dataset, dataloader, model, config, optimizer, devic
         KL = torch.pow(mean, 2).sum(axis=1)
         KL -= logvar.sum(axis=1)
         KL += torch.exp(logvar).sum(axis=1)
-        KL -= config["node"]
+        KL -= config["latent_dim"]
         KL *= 0.5
         KL = KL.mean()
         loss_.append(('KL', KL))
         
-        ### posterior variance: for debugging
+        ### activated: for debugging
         var_ = torch.exp(logvar).mean(axis=0)
-        for i in range(config["node"]):
-            loss_.append(('posterior_variance{}'.format(i+1), var_[i]))
+        loss_.append(('activated', (var_ < 0.1).sum()))
         
         loss = recon + KL 
         loss_.append(('loss', loss))
