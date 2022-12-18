@@ -170,7 +170,7 @@ def main():
         ax.flatten()[k].set_xlabel('alpha')
         ax.flatten()[k].set_ylabel(v)
     plt.tight_layout()
-    plt.savefig('./assets/{}/empirical_quantile.png'.format(config["dataset"]))
+    plt.savefig('./assets/{}/{}_empirical_quantile.png'.format(config["dataset"], config["dataset"]))
     # plt.show()
     plt.close()
     #%%
@@ -199,7 +199,7 @@ def main():
         ax.flatten()[k].set_ylabel(v)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('./assets/{}/sampling_estimated_quantile.png'.format(config["dataset"]))
+    plt.savefig('./assets/{}/{}_sampling_estimated_quantile.png'.format(config["dataset"], config["dataset"]))
     # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (sampling mechanism)': wandb.Image(fig)})
