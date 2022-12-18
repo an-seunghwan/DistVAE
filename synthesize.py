@@ -56,8 +56,8 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "adult"
-    dataset = "covtype"
+    # dataset = "covtype"
+    dataset = "credit"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -116,14 +116,16 @@ def main():
     from sklearn.ensemble import RandomForestClassifier
     #%%
     """baseline"""
-    covariates = [x for x in dataset.train.columns if x not in ['Elevation', 'Slope', 'Cover_Type']]
+    # covariates = [x for x in dataset.train.columns if x not in ['Elevation', 'Slope', 'Cover_Type']]
+    target = 'AMT_INCOME_TOTAL'
+    covariates = [x for x in dataset.train.columns if x not in [target]]
     
-    linreg = sm.OLS(dataset.train['Elevation'], dataset.train[covariates]).fit()
+    linreg = sm.OLS(dataset.train[target], dataset.train[covariates]).fit()
     # print(linreg.summary())
     pred = linreg.predict(test_dataset.test[covariates])
     
-    rsq_baseline = (test_dataset.test['Elevation'] - pred).pow(2).sum()
-    rsq_baseline /= np.var(test_dataset.test['Elevation']) * len(test_dataset.test)
+    rsq_baseline = (test_dataset.test[target] - pred).pow(2).sum()
+    rsq_baseline /= np.var(test_dataset.test[target]) * len(test_dataset.test)
     rsq_baseline = 1 - rsq_baseline
     print("[Baseline] R-squared: {:.3f}".format(rsq_baseline))
     wandb.log({'R^2 (Baseline)': rsq_baseline})
@@ -140,12 +142,12 @@ def main():
     quantiles = torch.cat(quantiles, dim=1).numpy()
     ITS = pd.DataFrame(quantiles, columns=dataset.continuous)
     #%%
-    linreg = sm.OLS(ITS['Elevation'], ITS[covariates]).fit()
+    linreg = sm.OLS(ITS[target], ITS[covariates]).fit()
     # print(linreg.summary())
     pred = linreg.predict(test_dataset.test[covariates])
     
-    rsq = (test_dataset.test['Elevation'] - pred).pow(2).sum()
-    rsq /= np.var(test_dataset.test['Elevation']) * len(test_dataset.test)
+    rsq = (test_dataset.test[target] - pred).pow(2).sum()
+    rsq /= np.var(test_dataset.test[target]) * len(test_dataset.test)
     rsq = 1 - rsq
     print("[Inverse transform sampling] R-squared: {:.3f}".format(rsq))
     wandb.log({'R^2 (Inverse transform sampling)': rsq})

@@ -53,8 +53,8 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "adult"
-    dataset = "covtype"
+    # dataset = "covtype"
+    dataset = "credit"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -164,7 +164,7 @@ def main():
     #%%
     """Empirical quantile plot"""
     q = np.arange(0.01, 1, 0.01)
-    fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(config["input_dim"], 4))
+    fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(config["input_dim"], 6))
     for k, v in enumerate(dataset.continuous):
         ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q))
         ax.flatten()[k].set_xlabel('alpha')
@@ -191,7 +191,7 @@ def main():
             alpha_hat += torch.cat(alpha_tilde_list, dim=1)
     alpha_hat /= n
     #%%
-    fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(config["input_dim"], 4))
+    fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(config["input_dim"], 6))
     for k, v in enumerate(dataset.continuous):
         ax.flatten()[k].plot(alpha_hat[:, k], x_linspace[:, k], label="sampled")
         ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
