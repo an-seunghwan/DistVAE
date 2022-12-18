@@ -36,9 +36,9 @@ except:
     import wandb
 
 run = wandb.init(
-    project="CausalDisentangled", 
+    project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Tabular", "TVAE"],
+    tags=["TVAE"],
 )
 #%%
 import argparse
@@ -55,11 +55,11 @@ def get_args(debug):
     
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
-    parser.add_argument('--dataset', type=str, default='loan', 
-                        help='Dataset options: loan, adult, covtype')
+    parser.add_argument('--dataset', type=str, default='covtype', 
+                        help='Dataset options: covtype, credit')
 
-    parser.add_argument("--node", default=3, type=int,
-                        help="the number of nodes")
+    parser.add_argument("--latent_dim", default=2, type=int,
+                        help="the dimension of latent variable")
     
     # optimization options
     parser.add_argument('--epochs', default=200, type=int,
@@ -95,18 +95,6 @@ def main():
     
     config["input_dim"] = transformer.output_dimensions
     #%%
-    if config["dataset"] == 'loan':
-        config["node"] = 3
-    
-    elif config["dataset"] == 'adult':
-        config["node"] = 3
-    
-    elif config["dataset"] == 'covtype':
-        config["node"] = 6
-        
-    else:
-        raise ValueError('Not supported dataset!')
-    #%%
     model = TVAE(config, device).to(device)
 
     optimizer = torch.optim.Adam(
@@ -137,7 +125,6 @@ def main():
     artifact.add_file('./modules/model.py')
     wandb.log_artifact(artifact)
     #%%
-    wandb.config.update(config, allow_val_change=True)
     wandb.run.finish()
 #%%
 if __name__ == '__main__':

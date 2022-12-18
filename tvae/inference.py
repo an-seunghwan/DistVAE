@@ -38,9 +38,9 @@ except:
     import wandb
 
 run = wandb.init(
-    project="CausalDisentangled", 
+    project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["Tabular", "TVAE", "Inference"],
+    tags=["TVAE", "Inference"],
 )
 #%%
 import argparse
@@ -59,13 +59,12 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = 'loan'
-    dataset = 'adult'
-    # dataset = 'covtype'
+    dataset = 'covtype'
+    # dataset = 'credit'
     
     """model load"""
     artifact = wandb.use_artifact(
-        'anseunghwan/CausalDisentangled/TVAE_{}:v{}'.format(dataset, config["num"]), type='model')
+        'anseunghwan/VAE(CRPS)/TVAE_{}:v{}'.format(dataset, config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     assert dataset == config["dataset"]
@@ -103,37 +102,8 @@ def main():
     #%%
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
         os.makedirs('./assets/{}'.format(config["dataset"]))
-    
-    from causallearn.search.ConstraintBased.PC import pc
-    from causallearn.utils.GraphUtils import GraphUtils
-    
-    if config["dataset"] == 'loan':
-        df = pd.read_csv('./data/Bank_Personal_Loan_Modelling.csv')
-        df = df.sample(frac=1, random_state=1).reset_index(drop=True)
-        df = df.drop(columns=['ID'])
-        continuous = ['CCAvg', 'Mortgage', 'Income', 'Experience', 'Age']
-        df = df[continuous]
         
-        df_ = (df - df.mean(axis=0)) / df.std(axis=0)
-        train = df_.iloc[:4000]
-        test = df_.iloc[4000:]
-        
-        i_test = 'chisq'
-        
-    elif config["dataset"] == 'adult':
-        df = pd.read_csv('./data/adult.csv')
-        df = df.sample(frac=1, random_state=1).reset_index(drop=True)
-        df = df[(df == '?').sum(axis=1) == 0]
-        df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
-        continuous = ['income', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
-        df = df[continuous]
-        
-        train = df.iloc[:40000]
-        test = df.iloc[40000:]
-        
-        i_test = 'chisq'
-        
-    elif config["dataset"] == 'covtype':
+    if config["dataset"] == 'covtype':
         df = pd.read_csv('./data/covtype.csv')
         df = df.sample(frac=1, random_state=5).reset_index(drop=True)
         continuous = [
@@ -143,64 +113,18 @@ def main():
             'Horizontal_Distance_To_Fire_Points',
             'Elevation', 
             'Aspect', 
-            'Slope', 
-            'Cover_Type']
+            # 'Slope', 
+            # 'Cover_Type'
+        ]
         df = df[continuous]
         df = df.dropna(axis=0)
         
         train = df.iloc[2000:, ]
         test = df.iloc[:2000, ]
         
-        i_test = 'fisherz'
-        
     else:
         raise ValueError('Not supported dataset!')
     
-    cg = pc(data=train.to_numpy(), 
-            alpha=0.05, 
-            indep_test=i_test) 
-    print(cg.G)
-    trainG = cg.G.graph
-    
-    # visualization
-    pdy = GraphUtils.to_pydot(cg.G, labels=df.columns)
-    pdy.write_png('./assets/{}/dag_train_{}.png'.format(config["dataset"], config["dataset"]))
-    fig = Image.open('./assets/{}/dag_train_{}.png'.format(config["dataset"], config["dataset"]))
-    wandb.log({'Baseline DAG (Train)': wandb.Image(fig)})
-    #%%
-    """train dataset representation"""
-    train_recon = []
-    for (x_batch, ) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
-        if config["cuda"]:
-            x_batch = x_batch.cuda()
-        
-        with torch.no_grad():
-            out = model(x_batch, deterministic=True)
-        train_recon.append(out[-1])
-    train_recon = torch.cat(train_recon, dim=0)
-    train_recon = transformer.inverse_transform(train_recon, model.sigma.detach().cpu().numpy())
-    #%%
-    """PC algorithm : train dataset representation"""
-    train_recon = train_recon[df.columns]
-    cg = pc(data=train_recon.to_numpy(), 
-            alpha=0.05, 
-            indep_test='fisherz') 
-    print(cg.G)
-    
-    # SHD: https://arxiv.org/pdf/1306.1043.pdf
-    trainSHD = (np.triu(trainG) != np.triu(cg.G.graph)).sum() # unmatch in upper-triangular
-    nonzero_idx = np.where(np.triu(cg.G.graph) != 0)
-    flag = np.triu(trainG)[nonzero_idx] == np.triu(cg.G.graph)[nonzero_idx]
-    nonzero_idx = (nonzero_idx[1][flag], nonzero_idx[0][flag])
-    trainSHD += (np.tril(trainG)[nonzero_idx] != np.tril(cg.G.graph)[nonzero_idx]).sum()
-    print('SHD (Train): {}'.format(trainSHD))
-    wandb.log({'SHD (Train)': trainSHD})
-    
-    # visualization
-    pdy = GraphUtils.to_pydot(cg.G, labels=train_recon.columns)
-    pdy.write_png('./assets/{}/dag_recon_train_{}.png'.format(config["dataset"], config["dataset"]))
-    fig = Image.open('./assets/{}/dag_recon_train_{}.png'.format(config["dataset"], config["dataset"]))
-    wandb.log({'Reconstructed DAG (Train)': wandb.Image(fig)})
     #%%
     """synthetic dataset"""
     torch.manual_seed(config["seed"])
@@ -217,28 +141,6 @@ def main():
     data = np.concatenate(data, axis=0)
     data = data[:len(train)]
     sample_df = transformer.inverse_transform(data, model.sigma.detach().cpu().numpy())
-    #%%
-    """PC algorithm : synthetic dataset"""
-    sample_df = sample_df[df.columns]
-    cg = pc(data=sample_df.to_numpy(), 
-            alpha=0.05, 
-            indep_test='fisherz') 
-    print(cg.G)
-    
-    # SHD: https://arxiv.org/pdf/1306.1043.pdf
-    sampleSHD = (np.triu(trainG) != np.triu(cg.G.graph)).sum() # unmatch in upper-triangular
-    nonzero_idx = np.where(np.triu(cg.G.graph) != 0)
-    flag = np.triu(trainG)[nonzero_idx] == np.triu(cg.G.graph)[nonzero_idx]
-    nonzero_idx = (nonzero_idx[1][flag], nonzero_idx[0][flag])
-    sampleSHD += (np.tril(trainG)[nonzero_idx] != np.tril(cg.G.graph)[nonzero_idx]).sum()
-    print('SHD (Sample): {}'.format(sampleSHD))
-    wandb.log({'SHD (Sample)': sampleSHD})
-    
-    # visualization
-    pdy = GraphUtils.to_pydot(cg.G, labels=sample_df.columns)
-    pdy.write_png('./assets/{}/dag_recon_sample_{}.png'.format(config["dataset"], config["dataset"]))
-    fig = Image.open('./assets/{}/dag_recon_sample_{}.png'.format(config["dataset"], config["dataset"]))
-    wandb.log({'Reconstructed DAG (Sampled)': wandb.Image(fig)})
     #%%
     """Machine Learning Efficacy"""
     
