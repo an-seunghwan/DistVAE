@@ -9,11 +9,9 @@ from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
-
-from modules.data_transformer import DataTransformer
 #%%
 class TabularDataset(Dataset): 
-    def __init__(self, config, random_state=0):
+    def __init__(self, config):
         base = pd.read_csv('./data/covtype.csv')
         base = base.sample(frac=1, random_state=5).reset_index(drop=True)
         
@@ -24,26 +22,18 @@ class TabularDataset(Dataset):
             'Horizontal_Distance_To_Fire_Points',
             'Elevation', 
             'Aspect', 
-            'Slope', 
-            'Cover_Type',
+            # 'Slope', 
+            # 'Cover_Type',
         ]
         df = base[self.continuous]
         df = df.dropna(axis=0)
         
         df = df.iloc[2000:]
         
-        if config["vgmm"]:
-            transformer = DataTransformer()
-            transformer.fit(df, random_state=random_state)
-            # transformer.fit(df, discrete_columns=self.discrete, random_state=random_state)
-            train_data = transformer.transform(df)
-            self.transformer = transformer
-            self.x_data = train_data
-        else:
-            df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
-            df[self.continuous] /= df[self.continuous].std(axis=0)
-            self.train = df
-            self.x_data = df.to_numpy()
+        df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
+        df[self.continuous] /= df[self.continuous].std(axis=0)
+        self.train = df
+        self.x_data = df.to_numpy()
             
     def __len__(self): 
         return len(self.x_data)
@@ -53,7 +43,7 @@ class TabularDataset(Dataset):
         return x
 #%%
 class TestTabularDataset(Dataset): 
-    def __init__(self, config, random_state=0):
+    def __init__(self, config):
         base = pd.read_csv('./data/covtype.csv')
         base = base.sample(frac=1, random_state=5).reset_index(drop=True)
         
@@ -64,8 +54,8 @@ class TestTabularDataset(Dataset):
             'Horizontal_Distance_To_Fire_Points',
             'Elevation', 
             'Aspect', 
-            'Slope', 
-            'Cover_Type',
+            # 'Slope', 
+            # 'Cover_Type',
         ]
         df = base[self.continuous]
         df = df.dropna(axis=0)
@@ -73,18 +63,10 @@ class TestTabularDataset(Dataset):
         df_ = df.iloc[2000:]
         df = df.iloc[:2000]
         
-        if config["vgmm"]:
-            transformer = DataTransformer()
-            transformer.fit(df_, random_state=random_state)
-            # transformer.fit(df, discrete_columns=self.discrete, random_state=random_state)
-            train_data = transformer.transform(df)
-            self.transformer = transformer
-            self.x_data = train_data
-        else:
-            df[self.continuous] = (df[self.continuous] - df_[self.continuous].mean(axis=0))
-            df[self.continuous] /= df_[self.continuous].std(axis=0)
-            self.test = df
-            self.x_data = df.to_numpy()
+        df[self.continuous] = (df[self.continuous] - df_[self.continuous].mean(axis=0))
+        df[self.continuous] /= df_[self.continuous].std(axis=0)
+        self.test = df
+        self.x_data = df.to_numpy()
             
     def __len__(self): 
         return len(self.x_data)

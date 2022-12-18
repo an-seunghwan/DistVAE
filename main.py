@@ -60,8 +60,6 @@ def get_args(debug):
                         help="the number of latent codes")
     parser.add_argument("--step", default=0.1, type=float,
                         help="interval size of quantile levels")
-    parser.add_argument("--vgmm", default=False, action="store_true",
-                        help="Whether to use VGMM to pre-processing")
     
     # optimization options
     parser.add_argument('--epochs', default=100, type=int,
@@ -102,15 +100,9 @@ def main():
     dataset = TabularDataset(config)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     # test_dataset = TestTabularDataset(config)
-    # print(test_dataset.transformer.output_dimensions)
     
-    if config["vgmm"]:
-        config["input_dim"] = dataset.transformer.output_dimensions
-    else:
-        config["input_dim"] = len(dataset.continuous)
-        # config["input_dim"] = len(dataset.continuous + dataset.discrete)
-    # config["output_dim"] = len(dataset.continuous)
-    # config["output_dim"] = len(dataset.continuous + dataset.discrete)
+    config["input_dim"] = len(dataset.continuous)
+    # config["input_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
     
@@ -118,10 +110,7 @@ def main():
         model.parameters(), 
         lr=config["lr"]
     )
-    # # learning rate schedule
-    # scheduler = torch.optim.lr_scheduler.LambdaLR(
-    #     optimizer=optimizer,
-    #     lr_lambda=lambda epoch: 0.95 ** epoch)
+    
     model.train()
     #%%
     for epoch in range(config["epochs"]):
@@ -133,8 +122,6 @@ def main():
         
         """update log"""
         wandb.log({x : np.mean(y) for x, y in logs.items()})
-        
-        # scheduler.step() # update learning rate
     #%%
     """model save"""
     torch.save(model.state_dict(), './assets/model_{}.pth'.format(config["dataset"]))

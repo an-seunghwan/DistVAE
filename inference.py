@@ -53,8 +53,8 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "covtype"
-    dataset = "credit"
+    dataset = "covtype"
+    # dataset = "credit"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -84,15 +84,9 @@ def main():
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     test_dataset = TestTabularDataset(config)
     test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
-    # print(test_dataset.transformer.output_dimensions)
     
-    if config["vgmm"]:
-        config["input_dim"] = dataset.transformer.output_dimensions
-    else:
-        config["input_dim"] = len(dataset.continuous)
-        # config["input_dim"] = len(dataset.continuous + dataset.discrete)
-    # config["output_dim"] = len(dataset.continuous)
-    # config["output_dim"] = len(dataset.continuous + dataset.discrete)
+    config["input_dim"] = len(dataset.continuous)
+    # config["input_dim"] = len(dataset.continuous + dataset.discrete)
     #%%
     model = VAE(config, device).to(device)
     if config["cuda"]:
@@ -164,11 +158,17 @@ def main():
     #%%
     """Empirical quantile plot"""
     q = np.arange(0.01, 1, 0.01)
-    fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(config["input_dim"], 6))
+    if config["dataset"] == "covtype":
+        fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(9, 6))
+    elif config["dataset"] == "credit":
+        fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(9, 9))
+    else:
+        raise ValueError('Not supported dataset!')
+    
     for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q))
-        ax.flatten()[k].set_xlabel('alpha')
-        ax.flatten()[k].set_ylabel(v)
+        ax.flatten()[k].plot(np.quantile(dataset.x_data[:, k], q=q), q)
+        ax.flatten()[k].set_xlabel(v)
+        ax.flatten()[k].set_ylabel('alpha')
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_empirical_quantile.png'.format(config["dataset"], config["dataset"]))
     # plt.show()
@@ -176,6 +176,7 @@ def main():
     #%%
     """Quantile Estimation with sampling mechanism"""
     n = 100
+    MC = 500
     x_linspace = np.linspace(
         [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
         [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
@@ -183,70 +184,31 @@ def main():
     x_linspace = torch.from_numpy(x_linspace)
     
     alpha_hat = torch.zeros((n, len(dataset.continuous)))
-    for _ in range(n):
+    for _ in range(MC):
         randn = torch.randn(n, config["latent_dim"]) # prior
         with torch.no_grad():
             gamma, beta = model.quantile_parameter(randn)
             alpha_tilde_list = model.quantile_inverse(x_linspace, gamma, beta)
             alpha_hat += torch.cat(alpha_tilde_list, dim=1)
-    alpha_hat /= n
+    alpha_hat /= MC
     #%%
-    fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(config["input_dim"], 6))
+    if config["dataset"] == "covtype":
+        fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(9, 6))
+    elif config["dataset"] == "credit":
+        fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(9, 9))
+    else:
+        raise ValueError('Not supported dataset!')
     for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(alpha_hat[:, k], x_linspace[:, k], label="sampled")
-        ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
-        ax.flatten()[k].set_xlabel('alpha')
-        ax.flatten()[k].set_ylabel(v)
+        ax.flatten()[k].plot(x_linspace[:, k], alpha_hat[:, k], label="sampled")
+        ax.flatten()[k].plot(np.quantile(dataset.x_data[:, k], q=q), q, label="empirical")
+        ax.flatten()[k].set_xlabel(v)
+        ax.flatten()[k].set_ylabel('alpha')
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_sampling_estimated_quantile.png'.format(config["dataset"], config["dataset"]))
     # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (sampling mechanism)': wandb.Image(fig)})
-    #%%
-    # n = 100
-    # q = np.arange(0.01, 0.99, 0.01)
-    # j = 0
-    # randn = torch.randn(n, config["latent_dim"]) # prior
-    # fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
-    # for k, v in enumerate(dataset.continuous):
-    #     quantiles = []
-    #     for alpha in q:
-    #         with torch.no_grad():
-    #             gamma, beta = model.quantile_parameter(randn)
-    #             quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-    #     ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
-    #     ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="prior")
-    #     ax.flatten()[k].set_xlabel('alpha')
-    #     ax.flatten()[k].set_ylabel(v)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/prior_estimated_quantile.png'.format(config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'Estimated quantile (prior)': wandb.Image(fig)})
-    # #%%
-    # n = 100
-    # q = np.arange(0.01, 0.99, 0.01)
-    # j = 0
-    # idx = np.random.choice(range(len(latents)), n, replace=False)
-    # fig, ax = plt.subplots(1, config["input_dim"], figsize=(2*config["input_dim"], 2))
-    # for k, v in enumerate(dataset.continuous):
-    #     quantiles = []
-    #     for alpha in q:
-    #         with torch.no_grad():
-    #             gamma, beta = model.quantile_parameter(latents[idx, :]) # aggregated
-    #             quantiles.append(model.quantile_function(alpha, gamma, beta, k))
-    #     ax.flatten()[k].plot(q, np.quantile(dataset.x_data[:, k], q=q), label="empirical")
-    #     ax.flatten()[k].plot(q, [x.mean().item() for x in quantiles], label="aggregated")
-    #     ax.flatten()[k].set_xlabel('alpha')
-    #     ax.flatten()[k].set_ylabel(v)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/aggregated_estimated_quantile.png'.format(config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'Estimated quantile (aggregated)': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
