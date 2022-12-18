@@ -1,6 +1,6 @@
 project: VAE(CRPS)
 program: main.py
-# program: inference.py
+# program: synthesize.py
 method: grid
 metric:
   goal: minimize

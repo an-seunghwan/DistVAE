@@ -39,7 +39,7 @@ except:
 run = wandb.init(
     project="VAE(CRPS)", 
     entity="anseunghwan",
-    tags=["TVAE", "Inference"],
+    tags=["TVAE", "Synthesize"],
 )
 #%%
 import argparse
