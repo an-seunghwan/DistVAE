@@ -143,22 +143,22 @@ class DataTransformer(object):
 
         return column_data_list
 
-    def _parallel_transform(self, raw_data, column_transform_info_list):
-        """Take a Pandas DataFrame and transform columns in parallel.
-        Outputs a list with Numpy arrays.
-        """
-        processes = []
-        for column_transform_info in column_transform_info_list:
-            column_name = column_transform_info.column_name
-            data = raw_data[[column_name]]
-            process = None
-            if column_transform_info.column_type == 'continuous':
-                process = delayed(self._transform_continuous)(column_transform_info, data)
-            else:
-                process = delayed(self._transform_discrete)(column_transform_info, data)
-            processes.append(process)
+    # def _parallel_transform(self, raw_data, column_transform_info_list):
+    #     """Take a Pandas DataFrame and transform columns in parallel.
+    #     Outputs a list with Numpy arrays.
+    #     """
+    #     processes = []
+    #     for column_transform_info in column_transform_info_list:
+    #         column_name = column_transform_info.column_name
+    #         data = raw_data[[column_name]]
+    #         process = None
+    #         if column_transform_info.column_type == 'continuous':
+    #             process = delayed(self._transform_continuous)(column_transform_info, data)
+    #         else:
+    #             process = delayed(self._transform_discrete)(column_transform_info, data)
+    #         processes.append(process)
 
-        return Parallel(n_jobs=-1)(processes)
+    #     return Parallel(n_jobs=-1)(processes)
 
     def transform(self, raw_data):
         """Take raw data and output a matrix data."""
@@ -168,16 +168,20 @@ class DataTransformer(object):
 
         # Only use parallelization with larger data sizes.
         # Otherwise, the transformation will be slower.
-        if raw_data.shape[0] < 500:
-            column_data_list = self._synchronous_transform(
-                raw_data,
-                self._column_transform_info_list
-            )
-        else:
-            column_data_list = self._parallel_transform(
-                raw_data,
-                self._column_transform_info_list
-            )
+        column_data_list = self._synchronous_transform(
+            raw_data,
+            self._column_transform_info_list
+        )
+        # if raw_data.shape[0] < 500:
+        #     column_data_list = self._synchronous_transform(
+        #         raw_data,
+        #         self._column_transform_info_list
+        #     )
+        # else:
+        #     column_data_list = self._parallel_transform(
+        #         raw_data,
+        #         self._column_transform_info_list
+        #     )
 
         return np.concatenate(column_data_list, axis=1).astype(float)
 
