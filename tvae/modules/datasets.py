@@ -57,7 +57,7 @@ def generate_dataset(config, device, random_state=0):
         df = df.iloc[:300000]
         
         transformer = DataTransformer()
-        transformer.fit(df, random_state=random_state)
+        transformer.fit(df.iloc[:30000], random_state=random_state)
         train_data = transformer.transform(df)
         
     else:
