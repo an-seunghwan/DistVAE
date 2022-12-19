@@ -196,7 +196,7 @@ def main():
     wandb.log({'R^2 (Baseline)': rsq_baseline})
     #%%
     # synthetic
-    sample_df = (sample_df - sample_df.mean(axis=0)) / sample_df.mean(axis=0)
+    sample_df = (sample_df - sample_df.mean(axis=0)) / sample_df.std(axis=0)
     
     if config["dataset"] == 'covtype':
         regr = RandomForestRegressor(random_state=0)
