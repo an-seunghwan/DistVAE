@@ -176,13 +176,18 @@ def main():
     train = (train - mean) / std
     test = (test - mean) / std
     
-    # linreg = sm.OLS(dataset.train[target], dataset.train[covariates]).fit()
-    # # print(linreg.summary())
-    # pred = linreg.predict(test_dataset.test[covariates])
+    if config["dataset"] == 'covtype':
+        regr = RandomForestRegressor(random_state=0)
+        regr.fit(train[covariates], train[target])
+        pred = regr.predict(test[covariates])
     
-    regr = RandomForestRegressor(random_state=0)
-    regr.fit(train[covariates], train[target])
-    pred = regr.predict(test[covariates])
+    elif config["dataset"] == "credit":
+        linreg = sm.OLS(train[target], train[covariates]).fit()
+        # print(linreg.summary())
+        pred = linreg.predict(test[covariates])
+            
+    else:
+        raise ValueError('Not supported dataset!')
     
     rsq_baseline = (test[target] - pred).pow(2).sum()
     rsq_baseline /= np.var(test[target]) * len(test)
@@ -191,15 +196,20 @@ def main():
     wandb.log({'R^2 (Baseline)': rsq_baseline})
     #%%
     # synthetic
-    sample_df = (sample_df - mean) / std
+    sample_df = (sample_df - sample_df.mean(axis=0)) / sample_df.mean(axis=0)
     
-    # linreg = sm.OLS(ITS[target], ITS[covariates]).fit()
-    # # print(linreg.summary())
-    # pred = linreg.predict(test_dataset.test[covariates])
+    if config["dataset"] == 'covtype':
+        regr = RandomForestRegressor(random_state=0)
+        regr.fit(sample_df[covariates], sample_df[target])
+        pred = regr.predict(test[covariates])
     
-    regr = RandomForestRegressor(random_state=0)
-    regr.fit(sample_df[covariates], sample_df[target])
-    pred = regr.predict(test[covariates])
+    elif config["dataset"] == "credit":
+        linreg = sm.OLS(sample_df[target], sample_df[covariates]).fit()
+        # print(linreg.summary())
+        pred = linreg.predict(test[covariates])
+            
+    else:
+        raise ValueError('Not supported dataset!')
     
     rsq = (test[target] - pred).pow(2).sum()
     rsq /= np.var(test[target]) * len(test)
