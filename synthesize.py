@@ -56,8 +56,8 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    dataset = "covtype"
-    # dataset = "credit"
+    # dataset = "covtype"
+    dataset = "credit"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -114,17 +114,23 @@ def main():
     covariates = [x for x in dataset.train.columns if x not in [target]]
     #%%
     """baseline"""
-    # linreg = sm.OLS(dataset.train[target], dataset.train[covariates]).fit()
-    # # print(linreg.summary())
-    # pred = linreg.predict(test_dataset.test[covariates])
+    if config["dataset"] == 'covtype':
+        regr = RandomForestRegressor(random_state=0)
+        regr.fit(dataset.train[covariates], dataset.train[target])
+        pred = regr.predict(test_dataset.test[covariates])
     
-    regr = RandomForestRegressor(random_state=0)
-    regr.fit(dataset.train[covariates], dataset.train[target])
-    pred = regr.predict(test_dataset.test[covariates])
-    
+    elif config["dataset"] == "credit":
+        linreg = sm.OLS(dataset.train[target], dataset.train[covariates]).fit()
+        # print(linreg.summary())
+        pred = linreg.predict(test_dataset.test[covariates])
+            
+    else:
+        raise ValueError('Not supported dataset!')
+
     rsq_baseline = (test_dataset.test[target] - pred).pow(2).sum()
     rsq_baseline /= np.var(test_dataset.test[target]) * len(test_dataset.test)
     rsq_baseline = 1 - rsq_baseline
+    
     print("[Baseline] R-squared: {:.3f}".format(rsq_baseline))
     wandb.log({'R^2 (Baseline)': rsq_baseline})
     #%%
@@ -140,13 +146,18 @@ def main():
     quantiles = torch.cat(quantiles, dim=1).numpy()
     ITS = pd.DataFrame(quantiles, columns=dataset.continuous)
     #%%
-    # linreg = sm.OLS(ITS[target], ITS[covariates]).fit()
-    # # print(linreg.summary())
-    # pred = linreg.predict(test_dataset.test[covariates])
+    if config["dataset"] == 'covtype':
+        regr = RandomForestRegressor(random_state=0)
+        regr.fit(ITS[covariates], ITS[target])
+        pred = regr.predict(test_dataset.test[covariates])
     
-    regr = RandomForestRegressor(random_state=0)
-    regr.fit(ITS[covariates], ITS[target])
-    pred = regr.predict(test_dataset.test[covariates])
+    elif config["dataset"] == "credit":
+        linreg = sm.OLS(ITS[target], ITS[covariates]).fit()
+        # print(linreg.summary())
+        pred = linreg.predict(test_dataset.test[covariates])
+            
+    else:
+        raise ValueError('Not supported dataset!')
     
     rsq = (test_dataset.test[target] - pred).pow(2).sum()
     rsq /= np.var(test_dataset.test[target]) * len(test_dataset.test)
