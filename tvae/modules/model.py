@@ -22,6 +22,13 @@ class TVAE(nn.Module):
             nn.ReLU(),
             nn.Linear(16, config["latent_dim"] * 2),
         ).to(device)
+        # self.encoder = nn.Sequential(
+        #     nn.Linear(config["input_dim"], 128),
+        #     nn.ReLU(),
+        #     nn.Linear(128, 128),
+        #     nn.ReLU(),
+        #     nn.Linear(128, config["latent_dim"] * 2),
+        # ).to(device)
         
         """decoder"""
         self.decoder = nn.Sequential(
@@ -33,6 +40,13 @@ class TVAE(nn.Module):
             nn.ReLU(),
             nn.Linear(32, config["input_dim"]),
         ).to(device)
+        # self.decoder = nn.Sequential(
+        #     nn.Linear(config["latent_dim"], 128),
+        #     nn.ReLU(),
+        #     nn.Linear(128, 128),
+        #     nn.ReLU(),
+        #     nn.Linear(128, config["input_dim"]),
+        # ).to(device)
         self.sigma = nn.Parameter(torch.ones(config["input_dim"]) * 0.1)
         
     def get_posterior(self, input):
