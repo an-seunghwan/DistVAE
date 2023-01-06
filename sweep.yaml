@@ -1,4 +1,4 @@
-project: VAE(CRPS)
+project: DistVAE
 program: main.py
 # program: inference.py
 # program: synthesize.py

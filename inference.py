@@ -107,7 +107,8 @@ def main():
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     elif config["dataset"] == "credit":
-        fig, ax = plt.subplots(3, config["CRPS_dim"] // 3, figsize=(9, 9))
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
+                               figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     else:
         raise ValueError('Not supported dataset!')
     
@@ -142,7 +143,8 @@ def main():
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     elif config["dataset"] == "credit":
-        fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(9, 9))
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
+                               figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     else:
         raise ValueError('Not supported dataset!')
     for k, v in enumerate(dataset.continuous):

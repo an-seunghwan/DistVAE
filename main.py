@@ -135,6 +135,7 @@ def main():
     artifact.add_file('./modules/model.py')
     wandb.log_artifact(artifact)
     #%%    
+    wandb.config.update(config, allow_val_change=True)
     wandb.run.finish()
 #%%
 if __name__ == '__main__':
