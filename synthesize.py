@@ -109,6 +109,13 @@ def main():
     
     model.eval()
     #%%    
+    """Inverse Transform Sampling"""
+    OutputInfo_list = dataset.OutputInfo_list
+    n = len(dataset.train)
+    with torch.no_grad():
+        samples = model.generate_data(n, OutputInfo_list)
+    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
+    #%%
     """Regression"""
     if config["dataset"] == "covtype":
         target = 'Elevation'
@@ -124,12 +131,6 @@ def main():
     #%%
     # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Regression...\n")
-    OutputInfo_list = dataset.OutputInfo_list
-    n = len(dataset.train)
-    with torch.no_grad():
-        samples = model.generate_data(n, OutputInfo_list)
-    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
-    
     r2result = regression_eval(ITS, test_dataset.test, target)
     wandb.log({'R^2 (ITS)': np.mean([x[1] for x in r2result])})
     #%%
@@ -162,12 +163,6 @@ def main():
     #%%
     # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Classification...\n")
-    OutputInfo_list = dataset.OutputInfo_list
-    n = len(dataset.train)
-    with torch.no_grad():
-        samples = model.generate_data(n, OutputInfo_list)
-    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
-    
     f1result = classification_eval(ITS, test_dataset.test, target)
     wandb.log({'F1 (ITS)': np.mean([x[1] for x in f1result])})
     #%%
@@ -185,7 +180,7 @@ def main():
     plt.close()
     wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
     #%%
-    """Goodness of Fit"""
+    """Goodness of Fit""" # only continuous
     print("\nGoodness of Fit...\n")
     
     Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS.to_numpy())
@@ -195,10 +190,10 @@ def main():
     wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
     wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
     #%%
-    """Privacy Preservability"""
+    """Privacy Preservability""" # only continuous
     print("\nPrivacy Preservability...\n")
     
-    privacy = privacy_metrics(dataset.train, ITS)
+    privacy = privacy_metrics(dataset.train[dataset.continuous], ITS[dataset.continuous])
     
     DCR = privacy[0, :3]
     print('DCR (R&S): {:.3f}'.format(DCR[0]))
