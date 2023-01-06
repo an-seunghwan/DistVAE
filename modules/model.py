@@ -90,7 +90,7 @@ class VAE(nn.Module):
         gamma, beta, logit = self.quantile_parameter(z)
         return z, mean, logvar, gamma, beta, logit
     
-    def sampling(self, n, OutputInfo_list):
+    def generate_data(self, n, OutputInfo_list):
         randn = torch.randn(n, self.config["latent_dim"]) # prior
         gamma, beta, logit = self.quantile_parameter(randn)
         

@@ -125,7 +125,7 @@ def main():
     OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
     with torch.no_grad():
-        samples = model.sampling(n, OutputInfo_list)
+        samples = model.generate_data(n, OutputInfo_list)
     ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
     
     r2result = regression_eval(ITS, test_dataset.test, target)
@@ -163,7 +163,7 @@ def main():
     OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
     with torch.no_grad():
-        samples = model.sampling(n, OutputInfo_list)
+        samples = model.generate_data(n, OutputInfo_list)
     ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
     
     f1result = classification_eval(ITS, test_dataset.test, target)
