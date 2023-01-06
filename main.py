@@ -17,9 +17,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
 from modules.simulation import set_random_seed
-
 from modules.model import VAE
-
 from modules.train import train_VAE
 #%%
 import sys
@@ -34,9 +32,9 @@ except:
     import wandb
 
 run = wandb.init(
-    project="VAE(CRPS)", 
+    project="DistVAE", 
     entity="anseunghwan",
-    # tags=[],
+    tags=['DistVAE'],
 )
 #%%
 import argparse
@@ -54,8 +52,9 @@ def get_args(debug):
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
     parser.add_argument('--dataset', type=str, default='covtype', 
-                        help='Dataset options: covtype, credit')
+                        help='Dataset options: covtype, credit, ???')
     
+    # model configurations
     parser.add_argument("--latent_dim", default=2, type=int,
                         help="the number of latent codes")
     parser.add_argument("--step", default=0.1, type=float,
@@ -82,7 +81,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     wandb.config.update(config)
@@ -97,12 +96,16 @@ def main():
     TabularDataset = dataset_module.TabularDataset
     # TestTabularDataset = dataset_module.TestTabularDataset
     
-    dataset = TabularDataset(config)
+    dataset = TabularDataset()
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     # test_dataset = TestTabularDataset(config)
     
-    config["input_dim"] = len(dataset.continuous)
-    # config["input_dim"] = len(dataset.continuous + dataset.discrete)
+    OutputInfo_list = dataset.OutputInfo_list
+    CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
+    softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
+    config["CRPS_dim"] = CRPS_dim
+    config["softmax_dim"] = softmax_dim
+    # config["input_dim"] = dataset.x_data.shape[1]
     #%%
     model = VAE(config, device).to(device)
     
@@ -114,7 +117,7 @@ def main():
     model.train()
     #%%
     for epoch in range(config["epochs"]):
-        logs = train_VAE(dataloader, model, config, optimizer, device)
+        logs = train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device)
         
         print_input = "[epoch {:03d}]".format(epoch + 1)
         print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
@@ -124,11 +127,11 @@ def main():
         wandb.log({x : np.mean(y) for x, y in logs.items()})
     #%%
     """model save"""
-    torch.save(model.state_dict(), './assets/model_{}.pth'.format(config["dataset"]))
-    artifact = wandb.Artifact('model_{}'.format(config["dataset"]), 
+    torch.save(model.state_dict(), './assets/DistVAE_{}.pth'.format(config["dataset"]))
+    artifact = wandb.Artifact('DistVAE_{}'.format(config["dataset"]), 
                             type='model',
                             metadata=config) # description=""
-    artifact.add_file('./assets/model_{}.pth'.format(config["dataset"]))
+    artifact.add_file('./assets/DistVAE_{}.pth'.format(config["dataset"]))
     artifact.add_file('./main.py')
     artifact.add_file('./modules/model.py')
     wandb.log_artifact(artifact)
