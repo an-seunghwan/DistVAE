@@ -14,7 +14,7 @@ class VAE(nn.Module):
         
         """encoder"""
         self.encoder = nn.Sequential(
-            nn.Linear(config["input_dim"], 16),
+            nn.Linear(config["CRPS_dim"] + config["softmax_dim"], 16),
             nn.ReLU(),
             nn.Linear(16, 8),
             nn.ReLU(),
@@ -29,7 +29,7 @@ class VAE(nn.Module):
             nn.ReLU(),
             nn.Linear(16, 64),
             nn.ReLU(),
-            nn.Linear(64, config["input_dim"] * (1 + (self.M + 1))),
+            nn.Linear(64, config["CRPS_dim"] * (1 + (self.M + 1)) + config["softmax_dim"]),
         ).to(device)
     
     def get_posterior(self, input):
@@ -52,11 +52,13 @@ class VAE(nn.Module):
     
     def quantile_parameter(self, z):
         h = self.spline(z)
-        h = torch.split(h, 1 + (self.M + 1), dim=1)
+        logit = h[:, -self.config["softmax_dim"]:]
+        spline = h[:, :-self.config["softmax_dim"]]
+        h = torch.split(spline, 1 + (self.M + 1), dim=1)
         
         gamma = [h_[:, [0]] for h_ in h]
         beta = [nn.Softplus()(h_[:, 1:]) for h_ in h] # positive constraint
-        return gamma, beta
+        return gamma, beta, logit
     
     def quantile_function(self, alpha, gamma, beta, j):
         return gamma[j] + (beta[j] * torch.where(alpha - self.delta > 0,
@@ -65,7 +67,7 @@ class VAE(nn.Module):
         
     def quantile_inverse(self, x, gamma, beta):
         alpha_tilde_list = []
-        for j in range(self.config["input_dim"]):
+        for j in range(self.config["CRPS_dim"]):
             delta_ = self.delta.unsqueeze(2).repeat(1, 1, self.M + 1)
             delta_ = torch.where(delta_ - self.delta > 0,
                                 delta_ - self.delta,
@@ -85,23 +87,25 @@ class VAE(nn.Module):
     
     def forward(self, input, deterministic=False):
         z, mean, logvar = self.encode(input, deterministic=deterministic)
-        gamma, beta = self.quantile_parameter(z)
-        return z, mean, logvar, gamma, beta
+        gamma, beta, logit = self.quantile_parameter(z)
+        return z, mean, logvar, gamma, beta, logit
 #%%
 def main():
     #%%
     config = {
-        "input_dim": 10,
+        # "input_dim": 10,
         "latent_dim": 2,
-        "step": 0.01,
+        "step": 0.1,
+        "CRPS_dim": 10,
+        "softmax_dim": 7,
     }
     
     model = VAE(config, 'cpu')
     for x in model.parameters():
         print(x.shape)
-    batch = torch.rand(10, config["input_dim"])
+    batch = torch.rand(10, config["CRPS_dim"] + config["softmax_dim"])
     
-    z, mean, logvar, gamma, beta = model(batch)
+    z, mean, logvar, gamma, beta, logit = model(batch)
     
     j = 0
     delta_ = model.delta.unsqueeze(2).repeat(1, 1, model.M + 1)
@@ -119,9 +123,10 @@ def main():
     assert mean.shape == (10, config["latent_dim"])
     assert logvar.shape == (10, config["latent_dim"])
     assert gamma[0].shape == (10, 1)
-    assert len(gamma) == config["input_dim"]
+    assert len(gamma) == config["CRPS_dim"]
     assert beta[0].shape == (10, model.M + 1)
-    assert len(beta) == config["input_dim"]
+    assert len(beta) == config["CRPS_dim"]
+    assert logit.shape[1] == config["softmax_dim"]
     
     print("Model pass test!")
 #%%
