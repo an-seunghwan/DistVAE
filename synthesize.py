@@ -116,11 +116,12 @@ def main():
         raise ValueError('Not supported dataset!')
     #%%
     # baseline
-    r2result = regression_eval(dataset.train, test_dataset.test, target)
-    for name, r2 in r2result:
-        wandb.log({'R^2 (Baseline, {})'.format(name): r2})
+    print("\nBaseline: Machine Learning Utility in Regression...\n")
+    base_r2result = regression_eval(dataset.train, test_dataset.test, target)
+    wandb.log({'R^2 (Baseline)': np.mean([x[1] for x in base_r2result])})
     #%%
     # Inverse Transform Sampling
+    print("\nSynthetic: Machine Learning Utility in Regression...\n")
     OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
     with torch.no_grad():
@@ -128,8 +129,21 @@ def main():
     ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
     
     r2result = regression_eval(ITS, test_dataset.test, target)
-    for name, r2 in r2result:
-        wandb.log({'R^2 (ITS, {})'.format(name): r2})
+    wandb.log({'R^2 (ITS)': np.mean([x[1] for x in r2result])})
+    #%%
+    # visualization
+    fig = plt.figure(figsize=(5, 4))
+    plt.plot([x[1] for x in base_r2result], 'o--', label='baseline')
+    plt.plot([x[1] for x in r2result], 'o--', label='synthetic')
+    plt.ylim(0, 1)
+    plt.ylabel('$R^2$', fontsize=13)
+    plt.xticks([0, 1, 2], [x[0] for x in base_r2result], fontsize=13)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('./assets/{}/{}_MLU_regression.png'.format(config["dataset"], config["dataset"]))
+    plt.show()
+    plt.close()
+    wandb.log({'ML Utility (Regression)': wandb.Image(fig)})
     #%%
     """Classification"""
     if config["dataset"] == "covtype":
@@ -140,11 +154,12 @@ def main():
         raise ValueError('Not supported dataset!')
     #%%
     # baseline
-    f1result = classification_eval(dataset.train, test_dataset.test, target)
-    for name, f1 in f1result:
-        wandb.log({'F1 (Baseline, {})'.format(name): f1})
+    print("\nBaseline: Machine Learning Utility in Classification...\n")
+    base_f1result = classification_eval(dataset.train, test_dataset.test, target)
+    wandb.log({'F1 (Baseline)': np.mean([x[1] for x in base_f1result])})
     #%%
     # Inverse Transform Sampling
+    print("\nSynthetic: Machine Learning Utility in Classification...\n")
     OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
     with torch.no_grad():
@@ -152,8 +167,21 @@ def main():
     ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
     
     f1result = classification_eval(ITS, test_dataset.test, target)
-    for name, f1 in f1result:
-        wandb.log({'F1 (ITS, {})'.format(name): f1})
+    wandb.log({'F1 (ITS)': np.mean([x[1] for x in f1result])})
+    #%%
+    # visualization
+    fig = plt.figure(figsize=(5, 4))
+    plt.plot([x[1] for x in base_f1result], 'o--', label='baseline')
+    plt.plot([x[1] for x in f1result], 'o--', label='synthetic')
+    plt.ylim(0, 1)
+    plt.ylabel('$F_1$', fontsize=13)
+    plt.xticks([0, 1, 2], [x[0] for x in base_f1result], fontsize=13)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('./assets/{}/{}_MLU_classification.png'.format(config["dataset"], config["dataset"]))
+    plt.show()
+    plt.close()
+    wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
