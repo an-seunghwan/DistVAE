@@ -153,7 +153,7 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_sampling_estimated_quantile.png'.format(config["dataset"], config["dataset"]))
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'Estimated quantile (sampling mechanism)': wandb.Image(fig)})
     #%%
