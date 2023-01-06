@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 #%%
-def train_VAE(dataloader, model, config, optimizer, device):
+def train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device):
     logs = {
         'loss': [], 
         'quantile': [],
@@ -24,7 +24,7 @@ def train_VAE(dataloader, model, config, optimizer, device):
         # with torch.autograd.set_detect_anomaly(True):    
         optimizer.zero_grad()
         
-        z, mean, logvar, gamma, beta = model(x_batch)
+        z, mean, logvar, gamma, beta, logit = model(x_batch)
         
         loss_ = []
         
@@ -33,16 +33,26 @@ def train_VAE(dataloader, model, config, optimizer, device):
         
         """loss"""
         j = 0
+        st = 0
         total_loss = 0
-        for j in range(config["input_dim"]):
-            term = (1 - model.delta.pow(3)) / 3 - model.delta - torch.maximum(alpha_tilde_list[j], model.delta).pow(2)
-            term += 2 * torch.maximum(alpha_tilde_list[j], model.delta) * model.delta
+        for j, info in enumerate(OutputInfo_list):
+            if info.activation_fn == "CRPS":
+                term = (1 - model.delta.pow(3)) / 3 - model.delta - torch.maximum(alpha_tilde_list[j], model.delta).pow(2)
+                term += 2 * torch.maximum(alpha_tilde_list[j], model.delta) * model.delta
+                
+                loss = (2 * alpha_tilde_list[j]) * x_batch[:, [j]]
+                loss += (1 - 2 * alpha_tilde_list[j]) * gamma[j]
+                loss += (beta[j] * term).sum(axis=1, keepdims=True)
+                loss *= 0.5
+                total_loss += loss.mean()
             
-            loss = (2 * alpha_tilde_list[j]) * x_batch[:, [j]]
-            loss += (1 - 2 * alpha_tilde_list[j]) * gamma[j]
-            loss += (beta[j] * term).sum(axis=1, keepdims=True)
-            loss *= 0.5
-            total_loss += loss.mean()
+            elif info.activation_fn == "softmax":
+                ed = st + info.dim
+                _, targets = x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + st + ed].max(dim=1)
+                out = logit[:, st : st + ed]
+                total_loss += nn.CrossEntropyLoss()(out, targets)
+                st = ed
+                
         loss_.append(('quantile', total_loss))
         
         """KL-Divergence"""
