@@ -35,6 +35,8 @@ def train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device):
         j = 0
         st = 0
         total_loss = 0
+        # tmp1 = []
+        # tmp2 = []
         for j, info in enumerate(OutputInfo_list):
             if info.activation_fn == "CRPS":
                 term = (1 - model.delta.pow(3)) / 3 - model.delta - torch.maximum(alpha_tilde_list[j], model.delta).pow(2)
@@ -45,13 +47,19 @@ def train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device):
                 loss += (beta[j] * term).sum(axis=1, keepdims=True)
                 loss *= 0.5
                 total_loss += loss.mean()
+                # tmp1.append(x_batch[:, [j]])
             
             elif info.activation_fn == "softmax":
                 ed = st + info.dim
-                _, targets = x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + st + ed].max(dim=1)
-                out = logit[:, st : st + ed]
+                _, targets = x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + ed].max(dim=1)
+                out = logit[:, st : ed]
+                # tmp1.append(x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + ed])
+                # tmp2.append(out)
                 total_loss += nn.CrossEntropyLoss()(out, targets)
                 st = ed
+        
+        # assert (torch.cat(tmp1, dim=1) - x_batch).sum().item() == 0
+        # assert (torch.cat(tmp2, dim=1) - logit).sum().item() == 0
                 
         loss_.append(('quantile', total_loss))
         
