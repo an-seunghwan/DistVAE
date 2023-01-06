@@ -16,12 +16,12 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
-import statsmodels.api as sm
-from sklearn.ensemble import RandomForestRegressor
-
 from modules.simulation import set_random_seed
-
 from modules.model import VAE
+from modules.evaluation import (
+    regression_eval,
+    classification_eval
+)
 #%%
 import sys
 import subprocess
@@ -35,9 +35,9 @@ except:
     import wandb
 
 run = wandb.init(
-    project="VAE(CRPS)", 
+    project="DistVAE", 
     entity="anseunghwan",
-    tags=["Synthesize"],
+    tags=['DistVAE', 'Synthetic'],
 )
 #%%
 import argparse
@@ -56,11 +56,11 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "covtype"
-    dataset = "credit"
+    dataset = "covtype"
+    # dataset = "credit"
     
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     assert dataset == config["dataset"]
@@ -81,15 +81,17 @@ def main():
     import importlib
     dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
     TabularDataset = dataset_module.TabularDataset
-    TestTabularDataset = dataset_module.TestTabularDataset
     
-    dataset = TabularDataset(config)
+    dataset = TabularDataset()
+    test_dataset = TabularDataset(train=False)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    test_dataset = TestTabularDataset(config)
     test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     
-    config["input_dim"] = len(dataset.continuous)
-    # config["input_dim"] = len(dataset.continuous + dataset.discrete)
+    OutputInfo_list = dataset.OutputInfo_list
+    CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
+    softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
+    config["CRPS_dim"] = CRPS_dim
+    config["softmax_dim"] = softmax_dim
     #%%
     model = VAE(config, device).to(device)
     if config["cuda"]:
@@ -105,68 +107,53 @@ def main():
     
     model.eval()
     #%%    
+    """Regression"""
     if config["dataset"] == "covtype":
         target = 'Elevation'
     elif config["dataset"] == "credit":
         target = 'AMT_INCOME_TOTAL'
     else:
         raise ValueError('Not supported dataset!')
-    covariates = [x for x in dataset.train.columns if x not in [target]]
     #%%
-    """baseline"""
-    if config["dataset"] == 'covtype':
-        regr = RandomForestRegressor(random_state=0)
-        regr.fit(dataset.train[covariates], dataset.train[target])
-        pred = regr.predict(test_dataset.test[covariates])
-    
-    elif config["dataset"] == "credit":
-        linreg = sm.OLS(dataset.train[target], dataset.train[covariates]).fit()
-        # print(linreg.summary())
-        pred = linreg.predict(test_dataset.test[covariates])
-            
-    else:
-        raise ValueError('Not supported dataset!')
-
-    rsq_baseline = (test_dataset.test[target] - pred).pow(2).sum()
-    rsq_baseline /= np.var(test_dataset.test[target]) * len(test_dataset.test)
-    rsq_baseline = 1 - rsq_baseline
-    
-    print("[Baseline] R-squared: {:.3f}".format(rsq_baseline))
-    wandb.log({'R^2 (Baseline)': rsq_baseline})
+    # baseline
+    r2result = regression_eval(dataset.train, test_dataset.test, target)
+    for name, r2 in r2result:
+        wandb.log({'R^2 (Baseline, {})'.format(name): r2})
     #%%
-    """Inverse transform sampling"""
+    # Inverse Transform Sampling
+    OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
-    randn = torch.randn(n, config["latent_dim"]) # prior
-    quantiles = []
-    for j in range(len(dataset.continuous)):
-        alpha = torch.rand(n, 1)
-        with torch.no_grad():
-            gamma, beta = model.quantile_parameter(randn)
-            quantiles.append(model.quantile_function(alpha, gamma, beta, j))
-    quantiles = torch.cat(quantiles, dim=1).numpy()
-    ITS = pd.DataFrame(quantiles, columns=dataset.continuous)
-    #%%
-    if config["dataset"] == 'covtype':
-        regr = RandomForestRegressor(random_state=0)
-        regr.fit(ITS[covariates], ITS[target])
-        pred = regr.predict(test_dataset.test[covariates])
+    with torch.no_grad():
+        samples = model.sampling(n, OutputInfo_list)
+    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
     
+    r2result = regression_eval(ITS, test_dataset.test, target)
+    for name, r2 in r2result:
+        wandb.log({'R^2 (ITS, {})'.format(name): r2})
+    #%%
+    """Classification"""
+    if config["dataset"] == "covtype":
+        target = 'Cover_Type'
     elif config["dataset"] == "credit":
-        linreg = sm.OLS(ITS[target], ITS[covariates]).fit()
-        # print(linreg.summary())
-        pred = linreg.predict(test_dataset.test[covariates])
-            
+        target = 'TARGET'
     else:
         raise ValueError('Not supported dataset!')
-    
-    rsq = (test_dataset.test[target] - pred).pow(2).sum()
-    rsq /= np.var(test_dataset.test[target]) * len(test_dataset.test)
-    rsq = 1 - rsq
-    print("[Inverse transform sampling] R-squared: {:.3f}".format(rsq))
-    wandb.log({'R^2 (Inverse transform sampling)': rsq})
     #%%
-    # """2. Mean"""
-    # from scipy.integrate import quad
+    # baseline
+    f1result = classification_eval(dataset.train, test_dataset.test, target)
+    for name, f1 in f1result:
+        wandb.log({'F1 (Baseline, {})'.format(name): f1})
+    #%%
+    # Inverse Transform Sampling
+    OutputInfo_list = dataset.OutputInfo_list
+    n = len(dataset.train)
+    with torch.no_grad():
+        samples = model.sampling(n, OutputInfo_list)
+    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
+    
+    f1result = classification_eval(ITS, test_dataset.test, target)
+    for name, f1 in f1result:
+        wandb.log({'F1 (ITS, {})'.format(name): f1})
     #%%
     wandb.run.finish()
 #%%
