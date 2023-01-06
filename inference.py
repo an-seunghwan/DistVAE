@@ -17,7 +17,6 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
 from modules.simulation import set_random_seed
-
 from modules.model import VAE
 #%%
 import sys
@@ -32,9 +31,9 @@ except:
     import wandb
 
 run = wandb.init(
-    project="VAE(CRPS)", 
+    project="DistVAE", 
     entity="anseunghwan",
-    tags=["Inference"],
+    tags=['DistVAE', 'Inference'],
 )
 #%%
 import argparse
@@ -57,7 +56,7 @@ def main():
     # dataset = "credit"
     
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/VAE(CRPS)/model_{}:v{}'.format(dataset, config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     assert dataset == config["dataset"]
@@ -78,15 +77,15 @@ def main():
     import importlib
     dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
     TabularDataset = dataset_module.TabularDataset
-    TestTabularDataset = dataset_module.TestTabularDataset
     
     dataset = TabularDataset(config)
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    test_dataset = TestTabularDataset(config)
-    test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     
-    config["input_dim"] = len(dataset.continuous)
-    # config["input_dim"] = len(dataset.continuous + dataset.discrete)
+    OutputInfo_list = dataset.OutputInfo_list
+    CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
+    softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
+    config["CRPS_dim"] = CRPS_dim
+    config["softmax_dim"] = softmax_dim
     #%%
     model = VAE(config, device).to(device)
     if config["cuda"]:
@@ -102,66 +101,13 @@ def main():
     
     model.eval()
     #%%    
-    # """3D visualization of quantile function"""
-    # if not os.path.exists("./assets/{}/latent_quantile".format(config["dataset"])): 
-    #     os.makedirs("./assets/{}/latent_quantile".format(config["dataset"]))
-            
-    # xs = torch.linspace(-2, 2, steps=30)
-    # ys = torch.linspace(-2, 2, steps=30)
-    # x, y = torch.meshgrid(xs, ys)
-    # grid_z = torch.cat([x.flatten()[:, None], y.flatten()[:, None]], axis=1)
-    
-    # j = 1
-    # alpha = 0.5
-    # for j in range(config["input_dim"]):
-    #     quantiles = []
-    #     for alpha in np.linspace(0.1, 0.9, 9):
-    #         with torch.no_grad():
-    #             gamma, beta = model.quantile_parameter(grid_z)
-    #             quantiles.append(model.quantile_function(alpha, gamma, beta, j))
-        
-    #     fig = plt.figure(figsize=(6, 4))
-    #     ax = fig.gca(projection='3d')
-    #     for i in range(len(quantiles)):
-    #         ax.plot_surface(x.numpy(), y.numpy(), quantiles[i].reshape(x.shape).numpy())
-    #         ax.set_xlabel('$z_1$', fontsize=14)
-    #         ax.set_ylabel('$z_2$', fontsize=14)
-    #         ax.set_zlabel('{}'.format(dataset.continuous[j]), fontsize=14)
-    #     ax.view_init(30, 60)
-    #     plt.tight_layout()
-    #     plt.savefig('./assets/{}/latent_quantile/latent_quantile_{}.png'.format(config["dataset"], j))
-    #     # plt.show()
-    #     plt.close()
-    #     wandb.log({'latent space ~ quantile': wandb.Image(fig)})
-    #%%
-    # """latent space"""
-    # latents = []
-    # for (x_batch) in tqdm.tqdm(iter(dataloader)):
-    #     if config["cuda"]:
-    #         x_batch = x_batch.cuda()
-        
-    #     with torch.no_grad():
-    #         mean, logvar = model.get_posterior(x_batch)
-    #     latents.append(mean)
-    # latents = torch.cat(latents, axis=0)
-    
-    # fig = plt.figure(figsize=(3, 3))
-    # plt.scatter(latents[:, 0], latents[:, 1], 
-    #             alpha=0.7, s=1)
-    # plt.xlabel('$z_1$', fontsize=14)
-    # plt.ylabel('$z_2$', fontsize=14)
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/latent.png'.format(config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'latent space': wandb.Image(fig)})
-    #%%
     """Empirical quantile plot"""
     q = np.arange(0.01, 1, 0.01)
     if config["dataset"] == "covtype":
-        fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(9, 6))
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
+                               figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     elif config["dataset"] == "credit":
-        fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(9, 9))
+        fig, ax = plt.subplots(3, config["CRPS_dim"] // 3, figsize=(9, 9))
     else:
         raise ValueError('Not supported dataset!')
     
@@ -176,7 +122,7 @@ def main():
     #%%
     """Quantile Estimation with sampling mechanism"""
     n = 100
-    MC = 500
+    MC = 5000
     x_linspace = np.linspace(
         [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
         [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
@@ -184,16 +130,17 @@ def main():
     x_linspace = torch.from_numpy(x_linspace)
     
     alpha_hat = torch.zeros((n, len(dataset.continuous)))
-    for _ in range(MC):
+    for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
         randn = torch.randn(n, config["latent_dim"]) # prior
         with torch.no_grad():
-            gamma, beta = model.quantile_parameter(randn)
+            gamma, beta, _ = model.quantile_parameter(randn)
             alpha_tilde_list = model.quantile_inverse(x_linspace, gamma, beta)
             alpha_hat += torch.cat(alpha_tilde_list, dim=1)
     alpha_hat /= MC
     #%%
     if config["dataset"] == "covtype":
-        fig, ax = plt.subplots(2, config["input_dim"] // 2, figsize=(9, 6))
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
+                               figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     elif config["dataset"] == "credit":
         fig, ax = plt.subplots(3, config["input_dim"] // 3, figsize=(9, 9))
     else:
@@ -206,7 +153,7 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_sampling_estimated_quantile.png'.format(config["dataset"], config["dataset"]))
-    # plt.show()
+    plt.show()
     plt.close()
     wandb.log({'Estimated quantile (sampling mechanism)': wandb.Image(fig)})
     #%%
