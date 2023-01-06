@@ -20,7 +20,9 @@ from modules.simulation import set_random_seed
 from modules.model import VAE
 from modules.evaluation import (
     regression_eval,
-    classification_eval
+    classification_eval,
+    goodness_of_fit,
+    privacy_metrics
 )
 #%%
 import sys
@@ -141,7 +143,7 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_MLU_regression.png'.format(config["dataset"], config["dataset"]))
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'ML Utility (Regression)': wandb.Image(fig)})
     #%%
@@ -179,9 +181,40 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_MLU_classification.png'.format(config["dataset"], config["dataset"]))
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
+    #%%
+    """Goodness of Fit"""
+    print("\nGoodness of Fit...\n")
+    
+    Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS.to_numpy())
+    
+    print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
+    print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
+    wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
+    wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
+    #%%
+    """Privacy Preservability"""
+    print("\nPrivacy Preservability...\n")
+    
+    privacy = privacy_metrics(dataset.train, ITS)
+    
+    DCR = privacy[0, :3]
+    print('DCR (R&S): {:.3f}'.format(DCR[0]))
+    print('DCR (R): {:.3f}'.format(DCR[1]))
+    print('DCR (S): {:.3f}'.format(DCR[2]))
+    wandb.log({'DCR (R&S)': DCR[0]})
+    wandb.log({'DCR (R)': DCR[1]})
+    wandb.log({'DCR (S)': DCR[2]})
+    
+    NNDR = privacy[0, 3:]
+    print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
+    print('NNDR (R): {:.3f}'.format(NNDR[1]))
+    print('NNDR (S): {:.3f}'.format(NNDR[2]))
+    wandb.log({'NNDR (R&S)': NNDR[0]})
+    wandb.log({'NNDR (R)': NNDR[1]})
+    wandb.log({'NNDR (S)': NNDR[2]})
     #%%
     wandb.run.finish()
 #%%
