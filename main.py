@@ -81,7 +81,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     wandb.config.update(config)
@@ -94,17 +94,16 @@ def main():
     import importlib
     dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
     TabularDataset = dataset_module.TabularDataset
-    # TestTabularDataset = dataset_module.TestTabularDataset
     
     dataset = TabularDataset()
     dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    # test_dataset = TestTabularDataset(config)
     
     OutputInfo_list = dataset.OutputInfo_list
     CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
     softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
     config["CRPS_dim"] = CRPS_dim
     config["softmax_dim"] = softmax_dim
+    # len(OutputInfo_list) - CRPS_dim
     # config["input_dim"] = dataset.x_data.shape[1]
     #%%
     model = VAE(config, device).to(device)

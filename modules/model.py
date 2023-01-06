@@ -89,6 +89,27 @@ class VAE(nn.Module):
         z, mean, logvar = self.encode(input, deterministic=deterministic)
         gamma, beta, logit = self.quantile_parameter(z)
         return z, mean, logvar, gamma, beta, logit
+    
+    def sampling(self, n, OutputInfo_list):
+        randn = torch.randn(n, self.config["latent_dim"]) # prior
+        gamma, beta, logit = self.quantile_parameter(randn)
+        
+        samples = []
+        st = 0
+        for j, info in enumerate(OutputInfo_list):
+            if info.activation_fn == "CRPS":
+                alpha = torch.rand(n, 1)
+                samples.append(self.quantile_function(alpha, gamma, beta, j))
+                
+            elif info.activation_fn == "softmax":
+                ed = st + info.dim
+                out = logit[:, st : ed]
+                _, out = out.max(dim=1)
+                samples.append(F.one_hot(out, num_classes=info.dim))
+                st = ed
+            
+        samples = torch.cat(samples, dim=1)
+        return samples
 #%%
 def main():
     #%%
