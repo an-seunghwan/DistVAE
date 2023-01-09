@@ -13,3 +13,4 @@ overleaf*
 *.pptx
 *_overleaf.png
 data
+wandb*

@@ -8,12 +8,13 @@ metric:
   name: loss
 parameters:
   # num:
-  #   values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  seed:
+    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
   dataset:
     values: ['covtype']
     # values: ['credit']
   latent_dim:
-    values: [2, 4, 8]
+    values: [2, 4]
   beta:
     values: [0.1, 0.01]
   step:
