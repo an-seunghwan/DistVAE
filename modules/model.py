@@ -90,6 +90,11 @@ class VAE(nn.Module):
         gamma, beta, logit = self.quantile_parameter(z)
         return z, mean, logvar, gamma, beta, logit
     
+    def gumbel_sampling(self, size, eps = 1e-20):
+        U = torch.rand(size)
+        G = (- (U + eps).log() + eps).log()
+        return G
+    
     def generate_data(self, n, OutputInfo_list):
         randn = torch.randn(n, self.config["latent_dim"]) # prior
         gamma, beta, logit = self.quantile_parameter(randn)
@@ -104,7 +109,14 @@ class VAE(nn.Module):
             elif info.activation_fn == "softmax":
                 ed = st + info.dim
                 out = logit[:, st : ed]
-                _, out = out.max(dim=1)
+                
+                """Gumbel-Max Trick"""
+                G = self.gumbel_sampling(out.shape)
+                _, out = (nn.LogSoftmax(dim=1)(out) + G).max(dim=1)
+                
+                # """ArgMax Sampling"""
+                # _, out = out.max(dim=1)
+                
                 samples.append(F.one_hot(out, num_classes=info.dim))
                 st = ed
             
