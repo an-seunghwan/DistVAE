@@ -56,10 +56,10 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     
-    dataset = "covtype"
-    # dataset = "credit"
+    # dataset = "covtype"
+    dataset = "credit"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -114,7 +114,48 @@ def main():
     num_params = count_parameters(model)
     print("Number of Parameters:", num_params)
     wandb.log({'Number of Parameters': num_params})
-    #%%    
+    #%%
+    if config["dataset"] == 'credit':
+        latents = []
+        dataloader_ = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
+        for (x_batch) in tqdm.tqdm(iter(dataloader_), desc="inner loop"):
+            if config["cuda"]:
+                x_batch = x_batch.cuda()
+            
+            with torch.no_grad():
+                mean, logvar = model.get_posterior(x_batch)
+            latents.append(mean)
+        latents = torch.cat(latents, dim=0).numpy()
+        labeles = dataset.train['TARGET_1'].to_numpy()
+        
+        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+        ax[0].scatter(
+            latents[labeles == 0, 0], latents[labeles == 0, 1],
+            s=30, c='blue', alpha=0.5,
+            label="0")
+        ax[0].scatter(
+            latents[labeles == 1, 0], latents[labeles == 1, 1],
+            s=30, c='red', alpha=0.5,
+            label="1")
+        ax[0].set_xlim(-4, 4)
+        ax[0].set_ylim(-4, 4)
+        ax[0].set_xlabel('$z_1$', fontsize=18)
+        ax[0].set_ylabel('$z_2$', fontsize=18)
+        ax[0].legend()
+        
+        ax[1].bar(
+            [0, 1], 
+            [(labeles == 0).mean(), (labeles == 1).mean()])
+        ax[1].set_xticks([0, 1], ["0", "1"])
+        ax[1].set_ylim(0, 1)
+        ax[1].set_xlabel('labels', fontsize=18)
+        ax[1].set_ylabel('proportion', fontsize=18)
+        
+        plt.tight_layout()
+        plt.savefig('./assets/{}/{}_latent_space_and_label_ratio.png'.format(config["dataset"], config["dataset"]))
+        # plt.show()
+        plt.close()
+    #%%
     """Inverse Transform Sampling"""
     OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
