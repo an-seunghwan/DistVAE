@@ -1,6 +1,6 @@
 #%%
 """
-Data Source: https://www.kaggle.com/competitions/home-credit-default-risk/data?select=application_train.csv
+Data Source: https://www.kaggle.com/datasets/teertha/personal-loan-modeling
 """
 #%%
 import tqdm
@@ -18,39 +18,28 @@ from collections import namedtuple
 
 OutputInfo = namedtuple('OutputInfo', ['dim', 'activation_fn'])
 #%%
-# https://chocoffee20.tistory.com/6
 class TabularDataset(Dataset): 
     def __init__(self, train=True):
-        base = pd.read_csv('./data/application_train.csv')
+        base = pd.read_csv('./data/Bank_Personal_Loan_Modelling.csv')
         base = base.sample(frac=1, random_state=0).reset_index(drop=True)
         
         self.continuous = [
-            'AMT_INCOME_TOTAL', 
-            'AMT_CREDIT', # target variable
-            'AMT_ANNUITY',
-            'AMT_GOODS_PRICE',
-            'REGION_POPULATION_RELATIVE', 
-            'DAYS_BIRTH', 
-            'DAYS_EMPLOYED', 
-            'DAYS_REGISTRATION',
-            'DAYS_ID_PUBLISH',
-            'OWN_CAR_AGE',
+            'Age',
+            'Experience',
+            'Income', # target variable
+            'CCAvg',
+            'Mortgage',
         ]
         self.discrete = [
-            'NAME_CONTRACT_TYPE',
-            'CODE_GENDER',
-            # 'FLAG_OWN_CAR',
-            'FLAG_OWN_REALTY',
-            'NAME_TYPE_SUITE',
-            'NAME_INCOME_TYPE',
-            'NAME_EDUCATION_TYPE',
-            'NAME_FAMILY_STATUS',
-            'NAME_HOUSING_TYPE',
-            'TARGET', # target variable
+            'Family',
+            'Personal Loan', # target variable
+            'Securities Account',
+            'CD Account',
+            'Online',
+            'CreditCard'
         ]
         base = base[self.continuous + self.discrete]
         base = base.dropna()
-        base = base.iloc[:50000]
         
         # one-hot encoding
         df_dummy = []
@@ -59,7 +48,7 @@ class TabularDataset(Dataset):
         base = pd.concat([base.drop(columns=self.discrete)] + df_dummy, axis=1)
         
         if train:
-            df = base.iloc[:45000] # train
+            df = base.iloc[:4000] # train
             
             df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
             df[self.continuous] /= df[self.continuous].std(axis=0)
@@ -67,8 +56,8 @@ class TabularDataset(Dataset):
             self.train = df
             self.x_data = df.to_numpy()
         else:
-            df_train = base.iloc[:45000] # train
-            df = base.iloc[45000:] # test
+            df_train = base.iloc[:4000] # train
+            df = base.iloc[4000:] # test
             
             df[self.continuous] = (df[self.continuous] - df_train[self.continuous].mean(axis=0))
             df[self.continuous] /= df_train[self.continuous].std(axis=0)
