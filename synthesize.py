@@ -56,10 +56,10 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "covtype"
-    dataset = "credit"
+    dataset = "covtype"
+    # dataset = "credit"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
