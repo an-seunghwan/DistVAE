@@ -60,6 +60,7 @@ def main():
     
     dataset = "covtype"
     # dataset = "credit"
+    # dataset = "loan"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -168,6 +169,8 @@ def main():
         target = 'Elevation'
     elif config["dataset"] == "credit":
         target = 'AMT_INCOME_TOTAL'
+    elif config["dataset"] == "loan":
+        target = 'Income'
     else:
         raise ValueError('Not supported dataset!')
     #%%
@@ -200,6 +203,8 @@ def main():
         target = 'Cover_Type'
     elif config["dataset"] == "credit":
         target = 'TARGET'
+    elif config["dataset"] == "loan":
+        target = 'Personal Loan'
     else:
         raise ValueError('Not supported dataset!')
     #%%
