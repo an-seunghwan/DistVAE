@@ -52,8 +52,9 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    dataset = "covtype"
+    # dataset = "covtype"
     # dataset = "credit"
+    dataset = "loan"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -109,6 +110,9 @@ def main():
     elif config["dataset"] == "credit":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
+    elif config["dataset"] == "loan":
+        fig, ax = plt.subplots(1, config["CRPS_dim"], 
+                               figsize=(3 * config["CRPS_dim"], 3 * 1))
     else:
         raise ValueError('Not supported dataset!')
     
@@ -145,6 +149,9 @@ def main():
     elif config["dataset"] == "credit":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
+    elif config["dataset"] == "loan":
+        fig, ax = plt.subplots(1, config["CRPS_dim"], 
+                               figsize=(3 * config["CRPS_dim"], 3 * 1))
     else:
         raise ValueError('Not supported dataset!')
     for k, v in enumerate(dataset.continuous):
