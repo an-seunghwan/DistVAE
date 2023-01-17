@@ -70,11 +70,11 @@ class TabularDataset(Dataset):
             self.x_data = df.to_numpy()
         
         # Output Information
-        OutputInfo_list = []
+        self.OutputInfo_list = []
         for c in self.continuous:
-            OutputInfo_list.append(OutputInfo(1, 'CRPS'))
+            self.OutputInfo_list.append(OutputInfo(1, 'CRPS'))
         for d, dummy in zip(self.discrete, df_dummy):
-            OutputInfo_list.append(OutputInfo(dummy.shape[1], 'softmax'))
+            self.OutputInfo_list.append(OutputInfo(dummy.shape[1], 'softmax'))
         
     def __len__(self): 
         return len(self.x_data)
