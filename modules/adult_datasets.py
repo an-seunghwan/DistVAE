@@ -1,4 +1,8 @@
 #%%
+"""
+Data Source: https://www.kaggle.com/datasets/uciml/adult-census-income
+"""
+#%%
 import tqdm
 import os
 import numpy as np
@@ -10,71 +14,67 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data import Dataset
 
-from modules.data_transformer import DataTransformer
+from collections import namedtuple
+
+OutputInfo = namedtuple('OutputInfo', ['dim', 'activation_fn'])
 #%%
-"""
-load dataset: Adult
-Reference: https://archive.ics.uci.edu/ml/datasets/Adult
-"""
 class TabularDataset(Dataset): 
-    def __init__(self, config, random_state=0):
-        df = pd.read_csv('./data/adult.csv')
-        df = df.sample(frac=1, random_state=1).reset_index(drop=True)
-        df = df[(df == '?').sum(axis=1) == 0]
-        # df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
+    def __init__(self, train=True):
+        base = pd.read_csv('./data/adult.csv')
+        base = base.sample(frac=1, random_state=0).reset_index(drop=True)
+        base = base[(base == '?').sum(axis=1) == 0]
         
-        self.continuous = ['age', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
-        df = df[self.continuous]
-        # self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
-        # df = df[self.continuous + self.discrete]
+        self.continuous = [
+            'educational-num',
+            'capital-gain', # target variable
+            'capital-loss',
+            'hours-per-week',
+        ]
+        self.discrete = [
+            'workclass',
+            'education',
+            'marital-status',
+            'occupation',
+            'relationship',
+            'race',
+            'gender',
+            'native-country',
+            'income', # target variable
+        ]
+        base = base[self.continuous + self.discrete]
+        base = base.dropna()
+        # [len(base[d].value_counts()) for d in self.discrete]
         
-        df = df.iloc[:40000]
+        # one-hot encoding
+        df_dummy = []
+        for d in self.discrete:
+            df_dummy.append(pd.get_dummies(base[d], prefix=d))
+        base = pd.concat([base.drop(columns=self.discrete)] + df_dummy, axis=1)
         
-        if config["vgmm"]:
-            transformer = DataTransformer()
-            transformer.fit(df, random_state=random_state)
-            # transformer.fit(df, discrete_columns=self.discrete, random_state=random_state)
-            train_data = transformer.transform(df)
-            self.transformer = transformer
-            self.x_data = train_data
-        else:
+        if train:
+            df = base.iloc[:40000] # train
+            
             df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
             df[self.continuous] /= df[self.continuous].std(axis=0)
+            
+            self.train = df
             self.x_data = df.to_numpy()
-        
-    def __len__(self): 
-        return len(self.x_data)
-
-    def __getitem__(self, idx): 
-        x = torch.FloatTensor(self.x_data[idx])
-        return x
-#%%
-class TestTabularDataset(Dataset): 
-    def __init__(self, config, random_state=0):
-        df = pd.read_csv('./data/adult.csv')
-        df = df.sample(frac=1, random_state=1).reset_index(drop=True)
-        df = df[(df == '?').sum(axis=1) == 0]
-        # df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
-        
-        self.continuous = ['age', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
-        df = df[self.continuous]
-        # self.discrete = ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'gender', 'income']
-        # df = df[self.continuous + self.discrete]
-        
-        df_ = df.iloc[:40000]
-        df = df.iloc[40000:]
-        
-        if config["vgmm"]:
-            transformer = DataTransformer()
-            transformer.fit(df_, random_state=random_state)
-            # transformer.fit(df_, discrete_columns=self.discrete, random_state=random_state)
-            train_data = transformer.transform(df)
-            self.transformer = transformer
-            self.x_data = train_data
         else:
-            df[self.continuous] = (df[self.continuous] - df_[self.continuous].mean(axis=0))
-            df[self.continuous] /= df_[self.continuous].std(axis=0)
+            df_train = base.iloc[:40000] # train
+            df = base.iloc[40000:] # test
+            
+            df[self.continuous] = (df[self.continuous] - df_train[self.continuous].mean(axis=0))
+            df[self.continuous] /= df_train[self.continuous].std(axis=0)
+            
+            self.test = df
             self.x_data = df.to_numpy()
+        
+        # Output Information
+        OutputInfo_list = []
+        for c in self.continuous:
+            OutputInfo_list.append(OutputInfo(1, 'CRPS'))
+        for d, dummy in zip(self.discrete, df_dummy):
+            OutputInfo_list.append(OutputInfo(dummy.shape[1], 'softmax'))
         
     def __len__(self): 
         return len(self.x_data)
