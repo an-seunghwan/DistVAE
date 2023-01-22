@@ -1,6 +1,6 @@
 #%%
 """
-Data Source: https://www.kaggle.com/datasets/arashnic/taxi-pricing-with-mobility-analytics?select=test.csv
+Data Source: https://www.kaggle.com/datasets/harlfoxem/housesalesprediction
 """
 #%%
 import tqdm
@@ -20,26 +20,31 @@ OutputInfo = namedtuple('OutputInfo', ['dim', 'activation_fn'])
 #%%
 class TabularDataset(Dataset): 
     def __init__(self, train=True):
-        base = pd.read_csv('./data/sigma_cabs.csv')
+        base = pd.read_csv('./data/kc_house_data.csv')
         base = base.sample(frac=1, random_state=0).reset_index(drop=True)
-        base = base.dropna().reset_index().drop(columns='index')
+        base.describe()
         
         self.continuous = [
-            'Trip_Distance', # target variable
-            'Life_Style_Index',
-            'Customer_Rating', 
-            'Var1',
-            'Var2',
-            'Var3',
+            'price', # target variable
+            'sqft_living',
+            'sqft_lot',
+            'sqft_above',
+            'sqft_basement',
+            'yr_built',
+            'yr_renovated',
+            'lat',
+            'long',
+            'sqft_living15',
+            'sqft_lot15',
         ]
         self.discrete = [
-            'Type_of_Cab',
-            'Customer_Since_Months',
-            'Confidence_Life_Style_Index',
-            'Destination_Type',
-            'Cancellation_Last_1Month',
-            'Gender',
-            'Surge_Pricing_Type', # target variable
+            'bedrooms',
+            'bathrooms',
+            'floors',
+            'waterfront',
+            'view',
+            'condition',
+            'grade', # target variable
         ]
         base = base[self.continuous + self.discrete]
         # [len(base[d].value_counts()) for d in discrete]
@@ -51,7 +56,7 @@ class TabularDataset(Dataset):
         base = pd.concat([base.drop(columns=self.discrete)] + df_dummy, axis=1)
         
         if train:
-            df = base.iloc[:40000] # train
+            df = base.iloc[:20000] # train
             
             df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
             df[self.continuous] /= df[self.continuous].std(axis=0)
@@ -59,8 +64,8 @@ class TabularDataset(Dataset):
             self.train = df
             self.x_data = df.to_numpy()
         else:
-            df_train = base.iloc[:40000] # train
-            df = base.iloc[40000:] # test
+            df_train = base.iloc[:20000] # train
+            df = base.iloc[20000:] # test
             
             df[self.continuous] = (df[self.continuous] - df_train[self.continuous].mean(axis=0))
             df[self.continuous] /= df_train[self.continuous].std(axis=0)
