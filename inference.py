@@ -40,7 +40,7 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=1, 
+    parser.add_argument('--num', type=int, default=0, 
                         help='model version')
 
     if debug:
@@ -54,7 +54,9 @@ def main():
     
     # dataset = "covtype"
     # dataset = "credit"
-    dataset = "loan"
+    # dataset = "loan"
+    # dataset = "cabs"
+    dataset = "kings"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -113,6 +115,12 @@ def main():
     elif config["dataset"] == "loan":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
+    elif config["dataset"] == "cabs":
+        fig, ax = plt.subplots(1, config["CRPS_dim"], 
+                               figsize=(3 * config["CRPS_dim"], 3 * 1))
+    elif config["dataset"] == "kings":
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2 + 1, 
+                               figsize=(3 * config["CRPS_dim"] // 2 + 1, 3 * 2))
     else:
         raise ValueError('Not supported dataset!')
     
@@ -152,6 +160,12 @@ def main():
     elif config["dataset"] == "loan":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
+    elif config["dataset"] == "cabs":
+        fig, ax = plt.subplots(1, config["CRPS_dim"], 
+                               figsize=(3 * config["CRPS_dim"], 3 * 1))
+    elif config["dataset"] == "kings":
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2 + 1, 
+                               figsize=(3 * config["CRPS_dim"] // 2 + 1, 3 * 2))
     else:
         raise ValueError('Not supported dataset!')
     for k, v in enumerate(dataset.continuous):

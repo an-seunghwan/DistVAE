@@ -46,7 +46,7 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=1, 
+    parser.add_argument('--num', type=int, default=0, 
                         help='model version')
 
     if debug:
@@ -58,9 +58,11 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    dataset = "covtype"
+    # dataset = "covtype"
     # dataset = "credit"
     # dataset = "loan"
+    # dataset = "cabs"
+    dataset = "kings"
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
@@ -171,6 +173,10 @@ def main():
         target = 'AMT_INCOME_TOTAL'
     elif config["dataset"] == "loan":
         target = 'Income'
+    elif config["dataset"] == "cabs":
+        target = 'Life_Style_Index'
+    elif config["dataset"] == "kings":
+        target = 'price'
     else:
         raise ValueError('Not supported dataset!')
     #%%
@@ -205,6 +211,10 @@ def main():
         target = 'TARGET'
     elif config["dataset"] == "loan":
         target = 'Personal Loan'
+    elif config["dataset"] == "cabs":
+        target = 'Surge_Pricing_Type'
+    elif config["dataset"] == "kings":
+        target = 'condition'
     else:
         raise ValueError('Not supported dataset!')
     #%%
