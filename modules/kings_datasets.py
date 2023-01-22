@@ -43,8 +43,8 @@ class TabularDataset(Dataset):
             'floors',
             'waterfront',
             'view',
-            'condition',
-            'grade', # target variable
+            'condition', # target variable
+            'grade', 
         ]
         base = base[self.continuous + self.discrete]
         # [len(base[d].value_counts()) for d in discrete]

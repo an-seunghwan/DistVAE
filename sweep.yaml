@@ -15,7 +15,8 @@ parameters:
     # values: ['covtype']
     # values: ['credit']
     # values: ['loan']
-    values: ['adult']
+    # values: ['cabs']
+    values: ['kings']
   # latent_dim:
   #   values: [2, 4]
   # beta:
