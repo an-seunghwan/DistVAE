@@ -5,7 +5,6 @@ from sklearn.linear_model import (
     LinearRegression,
     LogisticRegression
 )
-# from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 from sklearn.ensemble import (
     RandomForestRegressor,
     RandomForestClassifier,
@@ -25,8 +24,7 @@ def regression_eval(train, test, target):
     
     result = []
     for name, regr in [
-        ('linear', LinearRegression()), 
-        # ('Tree', DecisionTreeRegressor(random_state=0)), 
+        ('linear', LinearRegression(fit_intercept=False)), 
         ('RF', RandomForestRegressor(random_state=0)), 
         ('GradBoost', GradientBoostingRegressor(random_state=0))]:
         
@@ -34,13 +32,34 @@ def regression_eval(train, test, target):
         regr.fit(train[covariates], train[target])
         pred = regr.predict(test[covariates])
         
-        rsq = (test[target] - pred).pow(2).sum()
-        rsq /= np.var(test[target]) * len(test)
-        rsq = 1 - rsq
+        mape = (test[target] - pred).abs()
+        mape /= test[target].abs()
+        mape = mape.mean() * 100
         
-        result.append((name, rsq))
-        print("[{}] R^2: {:.3f}".format(name, rsq))
+        result.append((name, mape))
+        print("[{}] MAPE: {:.2f}%".format(name, mape))
     return result
+#%%
+# def regression_eval(train, test, target):
+#     covariates = [x for x in train.columns if x not in [target]]
+    
+#     result = []
+#     for name, regr in [
+#         ('linear', LinearRegression(fit_intercept=False)), 
+#         ('RF', RandomForestRegressor(random_state=0)), 
+#         ('GradBoost', GradientBoostingRegressor(random_state=0))]:
+        
+#         """baseline"""
+#         regr.fit(train[covariates], train[target])
+#         pred = regr.predict(test[covariates])
+        
+#         rsq = (test[target] - pred).pow(2).sum()
+#         rsq /= np.var(test[target]) * len(test)
+#         rsq = 1 - rsq
+        
+#         result.append((name, rsq))
+#         print("[{}] R^2: {:.3f}".format(name, rsq))
+#     return result
 #%%
 def classification_eval(train, test, target):
     covariates = [x for x in train.columns if not x.startswith(target)]
@@ -50,8 +69,7 @@ def classification_eval(train, test, target):
     
     result = []
     for name, clf in [
-        ('logistic', LogisticRegression(multi_class='ovr')), 
-        # ('Tree', DecisionTreeClassifier(random_state=0)), 
+        ('logistic', LogisticRegression(multi_class='ovr', fit_intercept=False)), 
         ('RF', RandomForestClassifier(random_state=0)), 
         ('GradBoost', GradientBoostingClassifier(random_state=0))]:
         
