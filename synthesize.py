@@ -48,6 +48,8 @@ def get_args(debug):
     
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
+    parser.add_argument('--dataset', type=str, default='covtype', 
+                        help='Dataset options: covtype, credit, loan, adult, cabs, kings')
 
     if debug:
         return parser.parse_args(args=[])
@@ -58,17 +60,10 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "covtype"
-    # dataset = "credit"
-    # dataset = "loan"
-    # dataset = "cabs"
-    dataset = "kings"
-    
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
-    assert dataset == config["dataset"]
     model_dir = artifact.download()
     
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
@@ -173,6 +168,8 @@ def main():
         target = 'AMT_INCOME_TOTAL'
     elif config["dataset"] == "loan":
         target = 'Income'
+    elif config["dataset"] == "adult":
+        target = 'capital-loss'
     elif config["dataset"] == "cabs":
         target = 'Life_Style_Index'
     elif config["dataset"] == "kings":
@@ -223,6 +220,8 @@ def main():
         target = 'TARGET'
     elif config["dataset"] == "loan":
         target = 'Personal Loan'
+    elif config["dataset"] == "adult":
+        target = 'income'
     elif config["dataset"] == "cabs":
         target = 'Surge_Pricing_Type'
     elif config["dataset"] == "kings":

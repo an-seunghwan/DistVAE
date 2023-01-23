@@ -42,6 +42,8 @@ def get_args(debug):
     
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
+    parser.add_argument('--dataset', type=str, default='covtype', 
+                        help='Dataset options: covtype, credit, loan, adult, cabs, kings')
 
     if debug:
         return parser.parse_args(args=[])
@@ -52,17 +54,10 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    # dataset = "covtype"
-    # dataset = "credit"
-    # dataset = "loan"
-    # dataset = "cabs"
-    dataset = "kings"
-    
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(dataset, config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
-    assert dataset == config["dataset"]
     model_dir = artifact.download()
     
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
@@ -115,6 +110,9 @@ def main():
     elif config["dataset"] == "loan":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
+    elif config["dataset"] == "adult":
+        fig, ax = plt.subplots(1, config["CRPS_dim"], 
+                               figsize=(3 * config["CRPS_dim"], 3 * 1))
     elif config["dataset"] == "cabs":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
@@ -158,6 +156,9 @@ def main():
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
     elif config["dataset"] == "loan":
+        fig, ax = plt.subplots(1, config["CRPS_dim"], 
+                               figsize=(3 * config["CRPS_dim"], 3 * 1))
+    elif config["dataset"] == "adult":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
     elif config["dataset"] == "cabs":
