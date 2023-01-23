@@ -53,8 +53,11 @@ class TabularDataset(Dataset):
         if train:
             df = base.iloc[:40000] # train
             
-            df[self.continuous] = (df[self.continuous] - df[self.continuous].mean(axis=0))
-            df[self.continuous] /= df[self.continuous].std(axis=0)
+            self.mean = df[self.continuous].mean(axis=0)
+            self.std = df[self.continuous].std(axis=0)
+            
+            df[self.continuous] = df[self.continuous] - self.mean
+            df[self.continuous] /= self.std
             
             self.train = df
             self.x_data = df.to_numpy()
@@ -62,8 +65,11 @@ class TabularDataset(Dataset):
             df_train = base.iloc[:40000] # train
             df = base.iloc[40000:] # test
             
-            df[self.continuous] = (df[self.continuous] - df_train[self.continuous].mean(axis=0))
-            df[self.continuous] /= df_train[self.continuous].std(axis=0)
+            self.mean = df_train[self.continuous].mean(axis=0)
+            self.std = df_train[self.continuous].std(axis=0)
+            
+            df[self.continuous] = df[self.continuous] - self.mean
+            df[self.continuous] /= self.std
             
             self.test = df
             self.x_data = df.to_numpy()
