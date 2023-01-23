@@ -5,6 +5,7 @@ from sklearn.linear_model import (
     LinearRegression,
     LogisticRegression
 )
+# from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
 from sklearn.ensemble import (
     RandomForestRegressor,
     RandomForestClassifier,
@@ -25,6 +26,7 @@ def regression_eval(train, test, target):
     result = []
     for name, regr in [
         ('linear', LinearRegression()), 
+        # ('Tree', DecisionTreeRegressor(random_state=0)), 
         ('RF', RandomForestRegressor(random_state=0)), 
         ('GradBoost', GradientBoostingRegressor(random_state=0))]:
         
@@ -49,6 +51,7 @@ def classification_eval(train, test, target):
     result = []
     for name, clf in [
         ('logistic', LogisticRegression(multi_class='ovr')), 
+        # ('Tree', DecisionTreeClassifier(random_state=0)), 
         ('RF', RandomForestClassifier(random_state=0)), 
         ('GradBoost', GradientBoostingClassifier(random_state=0))]:
         
