@@ -1,6 +1,7 @@
 #%%
 import numpy as np
 #%%
+import statsmodels.api as sm
 from sklearn.linear_model import (
     LinearRegression,
     LogisticRegression
@@ -24,12 +25,15 @@ def regression_eval(train, test, target):
     
     result = []
     for name, regr in [
-        ('linear', LinearRegression(fit_intercept=False)), 
+        ('linear', None), 
+        # ('linear', LinearRegression(fit_intercept=False)), 
         ('RF', RandomForestRegressor(random_state=0)), 
         ('GradBoost', GradientBoostingRegressor(random_state=0))]:
         
-        """baseline"""
-        regr.fit(train[covariates], train[target])
+        if name == 'linear':
+            regr = sm.OLS(train[target], train[covariates]).fit()
+        else:
+            regr.fit(train[covariates], train[target])
         pred = regr.predict(test[covariates])
         
         mape = (test[target] - pred).abs()
@@ -49,7 +53,6 @@ def regression_eval(train, test, target):
 #         ('RF', RandomForestRegressor(random_state=0)), 
 #         ('GradBoost', GradientBoostingRegressor(random_state=0))]:
         
-#         """baseline"""
 #         regr.fit(train[covariates], train[target])
 #         pred = regr.predict(test[covariates])
         
@@ -73,7 +76,6 @@ def classification_eval(train, test, target):
         ('RF', RandomForestClassifier(random_state=0)), 
         ('GradBoost', GradientBoostingClassifier(random_state=0))]:
         
-        """baseline"""
         clf.fit(train[covariates], train_target)
         pred = clf.predict(test[covariates])
         
