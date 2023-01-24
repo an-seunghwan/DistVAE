@@ -160,42 +160,85 @@ def main():
     with torch.no_grad():
         samples = model.generate_data(n, OutputInfo_list)
     ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
+    
+    # un-standardization of synthetic data
+    ITS[dataset.continuous] = ITS[dataset.continuous] * dataset.std + dataset.mean
+    #%%
+    # standardization of synthetic data
+    ITS_mean = ITS[dataset.continuous].mean(axis=0)
+    ITS_std = ITS[dataset.continuous].std(axis=0)
+    ITS_scaled = ITS.copy()
+    ITS_scaled[dataset.continuous] = (ITS[dataset.continuous] - ITS_mean) / ITS_std
+    #%%
+    """Goodness of Fit""" # only continuous
+    print("\nGoodness of Fit...\n")
+    
+    Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS_scaled.to_numpy())
+    
+    print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
+    print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
+    wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
+    wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
+    #%%
+    """Privacy Preservability""" # only continuous
+    print("\nPrivacy Preservability...\n")
+    
+    privacy = privacy_metrics(dataset.train[dataset.continuous], ITS_scaled[dataset.continuous])
+    
+    DCR = privacy[0, :3]
+    print('DCR (R&S): {:.3f}'.format(DCR[0]))
+    print('DCR (R): {:.3f}'.format(DCR[1]))
+    print('DCR (S): {:.3f}'.format(DCR[2]))
+    wandb.log({'DCR (R&S)': DCR[0]})
+    wandb.log({'DCR (R)': DCR[1]})
+    wandb.log({'DCR (S)': DCR[2]})
+    
+    NNDR = privacy[0, 3:]
+    print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
+    print('NNDR (R): {:.3f}'.format(NNDR[1]))
+    print('NNDR (S): {:.3f}'.format(NNDR[2]))
+    wandb.log({'NNDR (R&S)': NNDR[0]})
+    wandb.log({'NNDR (R)': NNDR[1]})
+    wandb.log({'NNDR (S)': NNDR[2]})
+    #%%
+    # dataset.train[dataset.continuous].hist(figsize=(10, 10))
+    # ITS[dataset.continuous].hist(figsize=(10, 10))
     #%%
     """Regression"""
     if config["dataset"] == "covtype":
         target = 'Elevation'
     elif config["dataset"] == "credit":
-        target = 'AMT_INCOME_TOTAL'
+        target = 'AMT_CREDIT'
     elif config["dataset"] == "loan":
-        target = 'Income'
+        target = 'Age'
     elif config["dataset"] == "adult":
-        target = 'capital-loss'
+        target = 'age'
     elif config["dataset"] == "cabs":
-        target = 'Life_Style_Index'
+        target = 'Trip_Distance'
     elif config["dataset"] == "kings":
-        target = 'price'
+        target = 'long'
     else:
         raise ValueError('Not supported dataset!')
     #%%
-    # un-standardization of synthetic data
-    ITS[dataset.continuous] = ITS[dataset.continuous] * dataset.std + dataset.mean
-    #%%
     # standardization except for target variable
-    dataset.train[target] = dataset.train[target] * dataset.std[target] + dataset.mean[target]
-    test_dataset.test[target] = test_dataset.test[target] * dataset.std[target] + dataset.mean[target]
+    real_train = dataset.train.copy()
+    real_test = test_dataset.test.copy()
+    real_train[target] = real_train[target] * dataset.std[target] + dataset.mean[target]
+    real_test[target] = real_test[target] * dataset.std[target] + dataset.mean[target]
     
     cont = [x for x in dataset.continuous if x not in [target]]
-    ITS[cont] = (ITS[cont] - ITS[cont].mean(axis=0)) / ITS[cont].std(axis=0)
+    ITS_scaled = ITS.copy()
+    ITS_scaled[cont] = (ITS_scaled[cont] - ITS_mean[cont]) / ITS_std[cont]
     #%%
     # baseline
     print("\nBaseline: Machine Learning Utility in Regression...\n")
-    base_reg = regression_eval(dataset.train, test_dataset.test, target)
+    base_reg = regression_eval(real_train, real_test, target)
     wandb.log({'MAPE (Baseline)': np.mean([x[1] for x in base_reg])})
     # wandb.log({'R^2 (Baseline)': np.mean([x[1] for x in base_reg])})
     #%%
     # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Regression...\n")
-    reg = regression_eval(ITS, test_dataset.test, target)
+    reg = regression_eval(ITS_scaled, real_test, target)
     wandb.log({'MAPE (ITS)': np.mean([x[1] for x in reg])})
     # wandb.log({'R^2 (ITS)': np.mean([x[1] for x in reg])})
     #%%
@@ -236,9 +279,12 @@ def main():
     base_clf = classification_eval(dataset.train, test_dataset.test, target)
     wandb.log({'F1 (Baseline)': np.mean([x[1] for x in base_clf])})
     #%%
+    ITS_scaled = ITS.copy()
+    ITS_scaled[dataset.continuous] = (ITS_scaled[dataset.continuous] - ITS_mean[dataset.continuous]) / ITS_std[dataset.continuous]
+    
     # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Classification...\n")
-    clf = classification_eval(ITS, test_dataset.test, target)
+    clf = classification_eval(ITS_scaled, test_dataset.test, target)
     wandb.log({'F1 (ITS)': np.mean([x[1] for x in clf])})
     #%%
     # # visualization
@@ -254,37 +300,6 @@ def main():
     # # plt.show()
     # plt.close()
     # wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
-    #%%
-    """Goodness of Fit""" # only continuous
-    print("\nGoodness of Fit...\n")
-    
-    Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS.to_numpy())
-    
-    print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
-    print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
-    wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
-    wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
-    #%%
-    """Privacy Preservability""" # only continuous
-    print("\nPrivacy Preservability...\n")
-    
-    privacy = privacy_metrics(dataset.train[dataset.continuous], ITS[dataset.continuous])
-    
-    DCR = privacy[0, :3]
-    print('DCR (R&S): {:.3f}'.format(DCR[0]))
-    print('DCR (R): {:.3f}'.format(DCR[1]))
-    print('DCR (S): {:.3f}'.format(DCR[2]))
-    wandb.log({'DCR (R&S)': DCR[0]})
-    wandb.log({'DCR (R)': DCR[1]})
-    wandb.log({'DCR (S)': DCR[2]})
-    
-    NNDR = privacy[0, 3:]
-    print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
-    print('NNDR (R): {:.3f}'.format(NNDR[1]))
-    print('NNDR (S): {:.3f}'.format(NNDR[2]))
-    wandb.log({'NNDR (R&S)': NNDR[0]})
-    wandb.log({'NNDR (R)': NNDR[1]})
-    wandb.log({'NNDR (S)': NNDR[2]})
     #%%
     wandb.run.finish()
 #%%
