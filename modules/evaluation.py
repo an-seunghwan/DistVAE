@@ -38,10 +38,10 @@ def regression_eval(train, test, target):
         
         mape = (test[target] - pred).abs()
         mape /= test[target].abs() + 1e-6
-        mape = mape.mean() * 100
+        mape = mape.mean()
         
         result.append((name, mape))
-        print("[{}] MAPE: {:.2f}%".format(name, mape))
+        print("[{}] MARE: {:.3f}%".format(name, mape))
     return result
 #%%
 # def regression_eval(train, test, target):
