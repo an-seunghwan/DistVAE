@@ -25,7 +25,7 @@ class TabularDataset(Dataset):
         base.describe()
         
         self.continuous = [
-            'price', # target variable
+            'price', 
             'sqft_living',
             'sqft_lot',
             'sqft_above',
@@ -33,7 +33,7 @@ class TabularDataset(Dataset):
             'yr_built',
             'yr_renovated',
             'lat',
-            'long',
+            'long', # target variable
             'sqft_living15',
             'sqft_lot15',
         ]
