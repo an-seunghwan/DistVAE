@@ -25,10 +25,10 @@ class TabularDataset(Dataset):
         base = base[(base == '?').sum(axis=1) == 0]
         
         self.continuous = [
-            'age', 
+            'age', # target variable
             'educational-num',
             'capital-gain', 
-            'capital-loss', # target variable
+            'capital-loss', 
             'hours-per-week',
         ]
         self.discrete = [

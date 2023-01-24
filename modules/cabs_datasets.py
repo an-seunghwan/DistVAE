@@ -25,8 +25,8 @@ class TabularDataset(Dataset):
         base = base.dropna().reset_index().drop(columns='index')
         
         self.continuous = [
-            'Trip_Distance', 
-            'Life_Style_Index', # target variable
+            'Trip_Distance', # target variable
+            'Life_Style_Index', 
             'Customer_Rating', 
             'Var1',
             'Var2',

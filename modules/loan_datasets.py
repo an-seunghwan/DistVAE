@@ -24,9 +24,9 @@ class TabularDataset(Dataset):
         base = base.sample(frac=1, random_state=0).reset_index(drop=True)
         
         self.continuous = [
-            'Age',
+            'Age', # target variable
             'Experience',
-            'Income', # target variable
+            'Income', 
             'CCAvg',
             'Mortgage',
         ]
