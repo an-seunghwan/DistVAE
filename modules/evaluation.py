@@ -33,7 +33,7 @@ def regression_eval(train, test, target):
         pred = regr.predict(test[covariates])
         
         mape = (test[target] - pred).abs()
-        mape /= test[target].abs()
+        mape /= test[target].abs() + 1e-6
         mape = mape.mean() * 100
         
         result.append((name, mape))
@@ -69,7 +69,7 @@ def classification_eval(train, test, target):
     
     result = []
     for name, clf in [
-        ('logistic', LogisticRegression(multi_class='ovr', fit_intercept=False)), 
+        ('logistic', LogisticRegression(multi_class='ovr', fit_intercept=False, max_iter=1000)), 
         ('RF', RandomForestClassifier(random_state=0)), 
         ('GradBoost', GradientBoostingClassifier(random_state=0))]:
         
