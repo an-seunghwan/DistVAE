@@ -199,19 +199,21 @@ def main():
     wandb.log({'MAPE (ITS)': np.mean([x[1] for x in reg])})
     # wandb.log({'R^2 (ITS)': np.mean([x[1] for x in reg])})
     #%%
-    # visualization
-    fig = plt.figure(figsize=(5, 4))
-    plt.plot([x[1] for x in base_reg], 'o--', label='baseline')
-    plt.plot([x[1] for x in reg], 'o--', label='synthetic')
-    plt.ylim(0, 1)
-    plt.ylabel('$R^2$', fontsize=13)
-    plt.xticks([0, 1, 2], [x[0] for x in base_reg], fontsize=13)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig('./assets/{}/{}_MLU_regression.png'.format(config["dataset"], config["dataset"]))
-    # plt.show()
-    plt.close()
-    wandb.log({'ML Utility (Regression)': wandb.Image(fig)})
+    # # visualization
+    # fig = plt.figure(figsize=(5, 4))
+    # plt.plot([x[1] for x in base_reg], 'o--', label='baseline')
+    # plt.plot([x[1] for x in reg], 'o--', label='synthetic')
+    # plt.ylim(0, 100)
+    # plt.ylabel('MAPE', fontsize=13)
+    # # plt.ylim(0, 1)
+    # # plt.ylabel('$R^2$', fontsize=13)
+    # plt.xticks([0, 1, 2], [x[0] for x in base_reg], fontsize=13)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig('./assets/{}/{}_MLU_regression.png'.format(config["dataset"], config["dataset"]))
+    # # plt.show()
+    # plt.close()
+    # wandb.log({'ML Utility (Regression)': wandb.Image(fig)})
     #%%
     """Classification"""
     if config["dataset"] == "covtype":
@@ -239,19 +241,19 @@ def main():
     clf = classification_eval(ITS, test_dataset.test, target)
     wandb.log({'F1 (ITS)': np.mean([x[1] for x in clf])})
     #%%
-    # visualization
-    fig = plt.figure(figsize=(5, 4))
-    plt.plot([x[1] for x in base_clf], 'o--', label='baseline')
-    plt.plot([x[1] for x in clf], 'o--', label='synthetic')
-    plt.ylim(0, 1)
-    plt.ylabel('$F_1$', fontsize=13)
-    plt.xticks([0, 1, 2], [x[0] for x in base_clf], fontsize=13)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig('./assets/{}/{}_MLU_classification.png'.format(config["dataset"], config["dataset"]))
-    # plt.show()
-    plt.close()
-    wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
+    # # visualization
+    # fig = plt.figure(figsize=(5, 4))
+    # plt.plot([x[1] for x in base_clf], 'o--', label='baseline')
+    # plt.plot([x[1] for x in clf], 'o--', label='synthetic')
+    # plt.ylim(0, 1)
+    # plt.ylabel('$F_1$', fontsize=13)
+    # plt.xticks([0, 1, 2], [x[0] for x in base_clf], fontsize=13)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig('./assets/{}/{}_MLU_classification.png'.format(config["dataset"], config["dataset"]))
+    # # plt.show()
+    # plt.close()
+    # wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
     #%%
     """Goodness of Fit""" # only continuous
     print("\nGoodness of Fit...\n")
