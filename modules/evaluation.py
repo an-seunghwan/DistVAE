@@ -36,12 +36,12 @@ def regression_eval(train, test, target):
             regr.fit(train[covariates], train[target])
         pred = regr.predict(test[covariates])
         
-        mape = (test[target] - pred).abs()
-        mape /= test[target].abs() + 1e-6
-        mape = mape.mean()
+        mare = (test[target] - pred).abs()
+        mare /= test[target].abs() + 1e-6
+        mare = mare.mean()
         
-        result.append((name, mape))
-        print("[{}] MARE: {:.3f}%".format(name, mape))
+        result.append((name, mare))
+        print("[{}] MARE: {:.3f}".format(name, mare))
     return result
 #%%
 # def regression_eval(train, test, target):

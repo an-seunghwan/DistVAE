@@ -22,7 +22,6 @@ class TabularDataset(Dataset):
     def __init__(self, train=True):
         base = pd.read_csv('./data/kc_house_data.csv')
         base = base.sample(frac=1, random_state=0).reset_index(drop=True)
-        base.describe()
         
         self.continuous = [
             'price', 
