@@ -233,22 +233,21 @@ def main():
     # baseline
     print("\nBaseline: Machine Learning Utility in Regression...\n")
     base_reg = regression_eval(real_train, real_test, target)
-    wandb.log({'MAPE (Baseline)': np.mean([x[1] for x in base_reg])})
+    wandb.log({'MARE (Baseline)': np.mean([x[1] for x in base_reg])})
     # wandb.log({'R^2 (Baseline)': np.mean([x[1] for x in base_reg])})
     #%%
     # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Regression...\n")
     reg = regression_eval(ITS_scaled, real_test, target)
-    wandb.log({'MAPE': np.mean([x[1] for x in reg])})
+    wandb.log({'MARE': np.mean([x[1] for x in reg])})
     # wandb.log({'R^2': np.mean([x[1] for x in reg])})
     #%%
     # # visualization
     # fig = plt.figure(figsize=(5, 4))
     # plt.plot([x[1] for x in base_reg], 'o--', label='baseline')
     # plt.plot([x[1] for x in reg], 'o--', label='synthetic')
-    # plt.ylim(0, 100)
-    # plt.ylabel('MAPE', fontsize=13)
-    # # plt.ylim(0, 1)
+    # plt.ylim(0, 1)
+    # plt.ylabel('MARE', fontsize=13)
     # # plt.ylabel('$R^2$', fontsize=13)
     # plt.xticks([0, 1, 2], [x[0] for x in base_reg], fontsize=13)
     # plt.legend()
