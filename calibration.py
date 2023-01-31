@@ -126,6 +126,7 @@ def main():
     df = base.iloc[:45000] # train
     #%%
     MC = 5000
+    j = 2 # Slope
     
     """Quantile Estimation with sampling mechanism"""
     n = 100
@@ -134,8 +135,6 @@ def main():
         np.quantile(dataset.x_data[:, j], q=0.99),
         n)
     
-    # for comparison
-    j = 2 # Slope
     alpha_est = torch.zeros((len(x_linspace_est), 1))
     for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
         randn = torch.randn(len(x_linspace_est), config["latent_dim"]) # prior
@@ -183,7 +182,7 @@ def main():
         else:
             alpha_mono.append(alpha_cal[i])
     #%%
-    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    fig, ax = plt.subplots(1, 1, figsize=(7, 4))
     
     ax.plot(x_linspace_est, alpha_est, label="estimate")
     ax.step(x_linspace, alpha_mono, label="calibration")

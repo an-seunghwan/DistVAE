@@ -175,7 +175,7 @@ def main():
     orig = pd.DataFrame(orig, columns=dataset.continuous).astype(int)
     
     for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(x_linspace[:, k], alpha_hat[:, k], label="sampled")
+        ax.flatten()[k].plot(x_linspace[:, k], alpha_hat[:, k], label="estimate")
         
         x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
             [np.quantile(orig.to_numpy()[:, k], q=0.01)],
