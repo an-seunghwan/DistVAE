@@ -127,18 +127,20 @@ def main():
     elif config["dataset"] == "credit":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
-        integer = ['DAYS_BIRTH', 
-                'DAYS_EMPLOYED', 
-                'DAYS_ID_PUBLISH']
+        integer = [
+            'DAYS_BIRTH', 
+            'DAYS_EMPLOYED', 
+            'DAYS_ID_PUBLISH']
         
     elif config["dataset"] == "loan":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
-        integer = ['Age',
-                'Experience',
-                'Income', 
-                'CCAvg',
-                'Mortgage']
+        integer = [
+            'Age',
+            'Experience',
+            'Income', 
+            'CCAvg',
+            'Mortgage']
         
     elif config["dataset"] == "adult":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
@@ -148,13 +150,15 @@ def main():
     elif config["dataset"] == "cabs":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
-        integer = ['Var2',
-                'Var3']
+        integer = [
+            'Var2',
+            'Var3']
         
     elif config["dataset"] == "kings":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2 + 1, 
                                figsize=(3 * config["CRPS_dim"] // 2 + 1, 3 * 2))
-        integer = ['sqft_living',
+        integer = [
+            'sqft_living',
             'sqft_lot',
             'sqft_above',
             'sqft_basement',
@@ -168,7 +172,7 @@ def main():
     
     orig = dataset.x_data[:, :len(dataset.continuous)] * np.array(dataset.std)
     orig += np.array(dataset.mean)
-    orig = pd.DataFrame(orig, columns=dataset.continuous)[integer].astype(int)
+    orig = pd.DataFrame(orig, columns=dataset.continuous).astype(int)
     
     for k, v in enumerate(dataset.continuous):
         ax.flatten()[k].plot(x_linspace[:, k], alpha_hat[:, k], label="sampled")
