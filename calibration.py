@@ -168,7 +168,7 @@ def main():
         [np.quantile(df.to_numpy()[:, j], q=0.01)],
         [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     #%%
-    """Calibration Step 2. Quantization F(x) = F(x + 0.5) - F(x - 0.5)"""
+    """Calibration Step 2. Discretization F(x) = F(x + 0.5) - F(x - 0.5)"""
     alpha_cal = []
     for i in range(len(alpha_hat)-1):
         alpha_cal.append((alpha_hat[i+1] - alpha_hat[i]).item())
