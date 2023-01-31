@@ -65,23 +65,27 @@ class VAE(nn.Module):
                                                 alpha - self.delta,
                                                 torch.zeros(()).to(self.device))).sum(axis=1, keepdims=True)
         
+    def _quantile_inverse(self, x, gamma, beta, j):
+        delta_ = self.delta.unsqueeze(2).repeat(1, 1, self.M + 1)
+        delta_ = torch.where(delta_ - self.delta > 0,
+                            delta_ - self.delta,
+                            torch.zeros(()).to(self.device))
+        mask = gamma[j] + (beta[j] * delta_.unsqueeze(2)).sum(axis=-1).squeeze(0).t()
+        # mask = [self.quantile_function(d, gamma, beta, j) for d in self.delta[0]]
+        # mask = torch.cat(mask, axis=1)
+        mask = torch.where(mask <= x, 
+                        mask, 
+                        torch.zeros(()).to(self.device)).type(torch.bool).type(torch.float)
+        alpha_tilde = x - gamma[j]
+        alpha_tilde += (mask * beta[j] * self.delta).sum(axis=1, keepdims=True)
+        alpha_tilde /= (mask * beta[j]).sum(axis=1, keepdims=True) + 1e-6
+        alpha_tilde = torch.clip(alpha_tilde, self.config["threshold"], 1) # numerical stability
+        return alpha_tilde
+
     def quantile_inverse(self, x, gamma, beta):
         alpha_tilde_list = []
         for j in range(self.config["CRPS_dim"]):
-            delta_ = self.delta.unsqueeze(2).repeat(1, 1, self.M + 1)
-            delta_ = torch.where(delta_ - self.delta > 0,
-                                delta_ - self.delta,
-                                torch.zeros(()).to(self.device))
-            mask = gamma[j] + (beta[j] * delta_.unsqueeze(2)).sum(axis=-1).squeeze(0).t()
-            # mask = [self.quantile_function(d, gamma, beta, j) for d in self.delta[0]]
-            # mask = torch.cat(mask, axis=1)
-            mask = torch.where(mask <= x[:, [j]], 
-                            mask, 
-                            torch.zeros(()).to(self.device)).type(torch.bool).type(torch.float)
-            alpha_tilde = x[:, [j]] - gamma[j]
-            alpha_tilde += (mask * beta[j] * self.delta).sum(axis=1, keepdims=True)
-            alpha_tilde /= (mask * beta[j]).sum(axis=1, keepdims=True) + 1e-6
-            alpha_tilde = torch.clip(alpha_tilde, self.config["threshold"], 1) # numerical stability
+            alpha_tilde = self._quantile_inverse(x[:, [j]], gamma, beta, j)
             alpha_tilde_list.append(alpha_tilde)
         return alpha_tilde_list
     
