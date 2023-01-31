@@ -54,7 +54,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
@@ -125,15 +125,33 @@ def main():
     
     df = base.iloc[:45000] # train
     #%%
-    """Quantile Estimation with sampling mechanism"""
     MC = 5000
-    j = 2
+    
+    """Quantile Estimation with sampling mechanism"""
+    n = 100
+    x_linspace_est = np.linspace(
+        np.quantile(dataset.x_data[:, j], q=0.01),
+        np.quantile(dataset.x_data[:, j], q=0.99),
+        n)
+    
+    # for comparison
+    j = 2 # Slope
+    alpha_est = torch.zeros((len(x_linspace_est), 1))
+    for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
+        randn = torch.randn(len(x_linspace_est), config["latent_dim"]) # prior
+        with torch.no_grad():
+            gamma, beta, _ = model.quantile_parameter(randn)
+            x_tmp = torch.from_numpy(x_linspace_est[:, None]).clone()
+            alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
+            alpha_est += alpha_tilde
+    alpha_est /= MC
+    
+    x_linspace_est = x_linspace_est * dataset.std[j] + dataset.mean[j]
+    #%%
+    """Calibration Step 1. Estimate F(x + 0.5), F(x - 0.5)"""
     x_linspace = [np.arange(x-0.5, y+0.5, 1) for x, y in zip(
         [np.quantile(df.to_numpy()[:, j], q=0.01)],
         [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
-    # x_linspace = [np.arange(x-0.5, y+0.5, 1) for x, y in zip(
-    #     [np.quantile(df.to_numpy()[:, k], q=0.01) for k in range(len(dataset.continuous))],
-    #     [np.quantile(df.to_numpy()[:, k], q=0.99) for k in range(len(dataset.continuous))])]
     
     alpha_hat = torch.zeros((len(x_linspace), 1))
     for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
@@ -146,66 +164,40 @@ def main():
             alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
             alpha_hat += alpha_tilde
     alpha_hat /= MC
-    # alpha_hat = []
-    # for j in range(len(dataset.continuous)):
-    #     _alpha_hat = torch.zeros((len(x_linspace[j]), 1))
-    #     for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
-    #         randn = torch.randn(len(x_linspace[j]), config["latent_dim"]) # prior
-    #         with torch.no_grad():
-    #             gamma, beta, _ = model.quantile_parameter(randn)
-    #             x_tmp = torch.from_numpy(x_linspace[j][:, None]).clone()
-    #             x_tmp -= dataset.mean.to_numpy()[j]
-    #             x_tmp /= dataset.std.to_numpy()[j]
-    #             alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
-    #             _alpha_hat += alpha_tilde
-    #     alpha_hat.append(_alpha_hat)
-    # alpha_hat = [x / MC for x in alpha_hat]
-    #%%
-    """calibration"""
+    
     x_linspace = [np.arange(x, y, 1) for x, y in zip(
-        [np.quantile(df.to_numpy()[:, k], q=0.01) for k in range(len(dataset.continuous))],
-        [np.quantile(df.to_numpy()[:, k], q=0.99) for k in range(len(dataset.continuous))])]
-    # x_linspace = [np.arange(x, y, 1) for x, y in zip(
-    #     [np.quantile(df.to_numpy()[:, k], q=0.01) for k in range(len(dataset.continuous))],
-    #     [np.quantile(df.to_numpy()[:, k], q=0.99) for k in range(len(dataset.continuous))])]
-    
-    alpha_cal = []
-    for j in range(len(alpha_hat)):
-        cal = []
-        for i in range(len(alpha_hat[j])-1):
-            cal.append((alpha_hat[j][i+1] - alpha_hat[j][i]).item())
-        alpha_cal.append(np.cumsum(cal))
-    
-    alpha_cal2 = []
-    for j in range(len(alpha_cal)):
-        cal2 = [0]
-        for i in range(1, len(alpha_cal[j])):
-            if alpha_cal[j][i] < cal2[-1]:
-                cal2.append(cal2[-1])
-            else:
-                cal2.append(alpha_cal[j][i])
-        alpha_cal2.append(cal2)
+        [np.quantile(df.to_numpy()[:, j], q=0.01)],
+        [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     #%%
-    q = np.arange(0.01, 1, 0.01)
-    if config["dataset"] == "covtype":
-        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2 , 
-                               figsize=(3 * config["CRPS_dim"] // 2, 2 * 3))
-    else:
-        raise ValueError('Not supported dataset!')
+    """Calibration Step 2. Quantization F(x) = F(x + 0.5) - F(x - 0.5)"""
+    alpha_cal = []
+    for i in range(len(alpha_hat)-1):
+        alpha_cal.append((alpha_hat[i+1] - alpha_hat[i]).item())
+    alpha_cal = np.cumsum(alpha_cal)
+    #%%
+    """Calibration Step 3. Ensure monotonicity"""
+    alpha_mono = [0]
+    for i in range(1, len(alpha_cal)):
+        if alpha_cal[i] < alpha_mono[-1]:
+            alpha_mono.append(alpha_mono[-1])
+        else:
+            alpha_mono.append(alpha_cal[i])
+    #%%
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     
-    for k, v in enumerate(dataset.continuous):
-        ax.flatten()[k].plot(x_linspace[k], alpha_cal2[k], label="calibration")
-        emp = [stats.percentileofscore(
-            df[dataset.continuous].to_numpy()[:, k],
-            x) * 0.01 for x in x_linspace[k]]
-        ax.flatten()[k].plot(x_linspace[k], emp, label="empirical")
-        # ax.flatten()[k].plot(np.quantile(df[dataset.continuous].to_numpy()[:, k], q=q), q, label="empirical")
-        ax.flatten()[k].set_xlabel(v)
-        ax.flatten()[k].set_ylabel('alpha')
-    plt.legend()
+    ax.plot(x_linspace_est, alpha_est, label="estimate")
+    ax.step(x_linspace, alpha_mono, label="calibration")
+    emp = [stats.percentileofscore(
+        df[dataset.continuous].to_numpy()[:, j],
+        x) * 0.01 for x in x_linspace]
+    ax.step(x_linspace, emp, label="empirical")
+    ax.set_xlabel(dataset.continuous[j], fontsize=14)
+    ax.set_ylabel('alpha', fontsize=14)
+    
+    plt.legend(fontsize=13)
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_CDF_calibration.png'.format(config["dataset"], config["dataset"]))
-    plt.show()
+    # plt.show()
     plt.close()
     wandb.log({'CDF calibration': wandb.Image(fig)})
     #%%
