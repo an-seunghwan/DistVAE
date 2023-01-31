@@ -18,12 +18,8 @@ from torch.utils.data import Dataset
 
 from modules.simulation import set_random_seed
 from modules.model import VAE
-from modules.evaluation import (
-    regression_eval,
-    classification_eval,
-    goodness_of_fit,
-    privacy_metrics
-)
+
+from scipy import stats
 #%%
 import sys
 import subprocess
@@ -39,7 +35,7 @@ except:
 run = wandb.init(
     project="DistVAE", 
     entity="anseunghwan",
-    tags=['DistVAE', 'Synthetic'],
+    tags=['DistVAE', 'Calibration'],
 )
 #%%
 import argparse
@@ -49,7 +45,7 @@ def get_args(debug):
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
-                        help='Dataset options: covtype, credit, loan, adult, cabs, kings')
+                        help='Dataset options: supports only covtype!')
 
     if debug:
         return parser.parse_args(args=[])
@@ -58,7 +54,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
@@ -107,198 +103,111 @@ def main():
     
     model.eval()
     #%%
-    """Number of Parameters"""
-    count_parameters = lambda model: sum(p.numel() for p in model.parameters() if p.requires_grad)
-    num_params = count_parameters(model)
-    print("Number of Parameters:", num_params)
-    wandb.log({'Number of Parameters': num_params})
-    #%%
-    if config["dataset"] == 'credit':
-        latents = []
-        dataloader_ = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
-        for (x_batch) in tqdm.tqdm(iter(dataloader_), desc="inner loop"):
-            if config["cuda"]:
-                x_batch = x_batch.cuda()
-            
-            with torch.no_grad():
-                mean, logvar = model.get_posterior(x_batch)
-            latents.append(mean)
-        latents = torch.cat(latents, dim=0).numpy()
-        labeles = dataset.train['TARGET_1'].to_numpy()
-        
-        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-        ax[0].scatter(
-            latents[labeles == 0, 0], latents[labeles == 0, 1],
-            s=30, c='blue', alpha=0.5,
-            label="0")
-        ax[0].scatter(
-            latents[labeles == 1, 0], latents[labeles == 1, 1],
-            s=30, c='red', alpha=0.5,
-            label="1")
-        ax[0].set_xlim(-4, 4)
-        ax[0].set_ylim(-4, 4)
-        ax[0].set_xlabel('$z_1$', fontsize=18)
-        ax[0].set_ylabel('$z_2$', fontsize=18)
-        ax[0].legend()
-        
-        ax[1].bar(
-            [0, 1], 
-            [(labeles == 0).mean(), (labeles == 1).mean()])
-        ax[1].set_xticks([0, 1], ["0", "1"])
-        ax[1].set_ylim(0, 1)
-        ax[1].set_xlabel('labels', fontsize=18)
-        ax[1].set_ylabel('proportion', fontsize=18)
-        
-        plt.tight_layout()
-        plt.savefig('./assets/{}/{}_latent_space_and_label_ratio.png'.format(config["dataset"], config["dataset"]))
-        # plt.show()
-        plt.close()
-    #%%
-    """Inverse Transform Sampling"""
-    OutputInfo_list = dataset.OutputInfo_list
-    n = len(dataset.train)
-    with torch.no_grad():
-        samples = model.generate_data(n, OutputInfo_list)
-    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
+    """real data: covtype dataset"""
+    base = pd.read_csv('./data/covtype.csv')
+    base = base.sample(frac=1, random_state=0).reset_index(drop=True)
+    base = base.dropna(axis=0)
+    base = base.iloc[:50000]
     
-    # un-standardization of synthetic data
-    ITS[dataset.continuous] = ITS[dataset.continuous] * dataset.std + dataset.mean
-    #%%
-    # standardization of synthetic data
-    ITS_mean = ITS[dataset.continuous].mean(axis=0)
-    ITS_std = ITS[dataset.continuous].std(axis=0)
-    ITS_scaled = ITS.copy()
-    ITS_scaled[dataset.continuous] = (ITS[dataset.continuous] - ITS_mean) / ITS_std
-    #%%
-    """Goodness of Fit""" # only continuous
-    print("\nGoodness of Fit...\n")
+    continuous = [
+        'Elevation', # target variable
+        'Aspect', 
+        'Slope',
+        'Horizontal_Distance_To_Hydrology', 
+        'Vertical_Distance_To_Hydrology',
+        'Horizontal_Distance_To_Roadways',
+        'Hillshade_9am',
+        'Hillshade_Noon',
+        'Hillshade_3pm',
+        'Horizontal_Distance_To_Fire_Points',
+    ]
+    base = base[continuous]
     
-    Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS_scaled.to_numpy())
-    
-    print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
-    print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
-    wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
-    wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
+    df = base.iloc[:45000] # train
     #%%
-    """Privacy Preservability""" # only continuous
-    print("\nPrivacy Preservability...\n")
+    """Quantile Estimation with sampling mechanism"""
+    MC = 5000
+    j = 2
+    x_linspace = [np.arange(x-0.5, y+0.5, 1) for x, y in zip(
+        [np.quantile(df.to_numpy()[:, j], q=0.01)],
+        [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
+    # x_linspace = [np.arange(x-0.5, y+0.5, 1) for x, y in zip(
+    #     [np.quantile(df.to_numpy()[:, k], q=0.01) for k in range(len(dataset.continuous))],
+    #     [np.quantile(df.to_numpy()[:, k], q=0.99) for k in range(len(dataset.continuous))])]
     
-    privacy = privacy_metrics(dataset.train[dataset.continuous], ITS_scaled[dataset.continuous])
-    
-    DCR = privacy[0, :3]
-    print('DCR (R&S): {:.3f}'.format(DCR[0]))
-    print('DCR (R): {:.3f}'.format(DCR[1]))
-    print('DCR (S): {:.3f}'.format(DCR[2]))
-    wandb.log({'DCR (R&S)': DCR[0]})
-    wandb.log({'DCR (R)': DCR[1]})
-    wandb.log({'DCR (S)': DCR[2]})
-    
-    NNDR = privacy[0, 3:]
-    print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
-    print('NNDR (R): {:.3f}'.format(NNDR[1]))
-    print('NNDR (S): {:.3f}'.format(NNDR[2]))
-    wandb.log({'NNDR (R&S)': NNDR[0]})
-    wandb.log({'NNDR (R)': NNDR[1]})
-    wandb.log({'NNDR (S)': NNDR[2]})
+    alpha_hat = torch.zeros((len(x_linspace), 1))
+    for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
+        randn = torch.randn(len(x_linspace), config["latent_dim"]) # prior
+        with torch.no_grad():
+            gamma, beta, _ = model.quantile_parameter(randn)
+            x_tmp = torch.from_numpy(x_linspace[:, None]).clone()
+            x_tmp -= dataset.mean.to_numpy()[j]
+            x_tmp /= dataset.std.to_numpy()[j]
+            alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
+            alpha_hat += alpha_tilde
+    alpha_hat /= MC
+    # alpha_hat = []
+    # for j in range(len(dataset.continuous)):
+    #     _alpha_hat = torch.zeros((len(x_linspace[j]), 1))
+    #     for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
+    #         randn = torch.randn(len(x_linspace[j]), config["latent_dim"]) # prior
+    #         with torch.no_grad():
+    #             gamma, beta, _ = model.quantile_parameter(randn)
+    #             x_tmp = torch.from_numpy(x_linspace[j][:, None]).clone()
+    #             x_tmp -= dataset.mean.to_numpy()[j]
+    #             x_tmp /= dataset.std.to_numpy()[j]
+    #             alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
+    #             _alpha_hat += alpha_tilde
+    #     alpha_hat.append(_alpha_hat)
+    # alpha_hat = [x / MC for x in alpha_hat]
     #%%
-    # dataset.train[dataset.continuous].hist(figsize=(10, 10))
-    # ITS[dataset.continuous].hist(figsize=(10, 10))
+    """calibration"""
+    x_linspace = [np.arange(x, y, 1) for x, y in zip(
+        [np.quantile(df.to_numpy()[:, k], q=0.01) for k in range(len(dataset.continuous))],
+        [np.quantile(df.to_numpy()[:, k], q=0.99) for k in range(len(dataset.continuous))])]
+    # x_linspace = [np.arange(x, y, 1) for x, y in zip(
+    #     [np.quantile(df.to_numpy()[:, k], q=0.01) for k in range(len(dataset.continuous))],
+    #     [np.quantile(df.to_numpy()[:, k], q=0.99) for k in range(len(dataset.continuous))])]
+    
+    alpha_cal = []
+    for j in range(len(alpha_hat)):
+        cal = []
+        for i in range(len(alpha_hat[j])-1):
+            cal.append((alpha_hat[j][i+1] - alpha_hat[j][i]).item())
+        alpha_cal.append(np.cumsum(cal))
+    
+    alpha_cal2 = []
+    for j in range(len(alpha_cal)):
+        cal2 = [0]
+        for i in range(1, len(alpha_cal[j])):
+            if alpha_cal[j][i] < cal2[-1]:
+                cal2.append(cal2[-1])
+            else:
+                cal2.append(alpha_cal[j][i])
+        alpha_cal2.append(cal2)
     #%%
-    """Regression"""
+    q = np.arange(0.01, 1, 0.01)
     if config["dataset"] == "covtype":
-        target = 'Elevation'
-    elif config["dataset"] == "credit":
-        target = 'AMT_CREDIT'
-    elif config["dataset"] == "loan":
-        target = 'Age'
-    elif config["dataset"] == "adult":
-        target = 'age'
-    elif config["dataset"] == "cabs":
-        target = 'Trip_Distance'
-    elif config["dataset"] == "kings":
-        target = 'long'
+        fig, ax = plt.subplots(2, config["CRPS_dim"] // 2 , 
+                               figsize=(3 * config["CRPS_dim"] // 2, 2 * 3))
     else:
         raise ValueError('Not supported dataset!')
-    #%%
-    # standardization except for target variable
-    real_train = dataset.train.copy()
-    real_test = test_dataset.test.copy()
-    real_train[target] = real_train[target] * dataset.std[target] + dataset.mean[target]
-    real_test[target] = real_test[target] * dataset.std[target] + dataset.mean[target]
     
-    cont = [x for x in dataset.continuous if x not in [target]]
-    ITS_scaled = ITS.copy()
-    ITS_scaled[cont] = (ITS_scaled[cont] - ITS_mean[cont]) / ITS_std[cont]
-    #%%
-    # baseline
-    print("\nBaseline: Machine Learning Utility in Regression...\n")
-    base_reg = regression_eval(real_train, real_test, target)
-    wandb.log({'MARE (Baseline)': np.mean([x[1] for x in base_reg])})
-    # wandb.log({'R^2 (Baseline)': np.mean([x[1] for x in base_reg])})
-    #%%
-    # Inverse Transform Sampling
-    print("\nSynthetic: Machine Learning Utility in Regression...\n")
-    reg = regression_eval(ITS_scaled, real_test, target)
-    wandb.log({'MARE': np.mean([x[1] for x in reg])})
-    # wandb.log({'R^2': np.mean([x[1] for x in reg])})
-    #%%
-    # # visualization
-    # fig = plt.figure(figsize=(5, 4))
-    # plt.plot([x[1] for x in base_reg], 'o--', label='baseline')
-    # plt.plot([x[1] for x in reg], 'o--', label='synthetic')
-    # plt.ylim(0, 1)
-    # plt.ylabel('MARE', fontsize=13)
-    # # plt.ylabel('$R^2$', fontsize=13)
-    # plt.xticks([0, 1, 2], [x[0] for x in base_reg], fontsize=13)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/{}_MLU_regression.png'.format(config["dataset"], config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'ML Utility (Regression)': wandb.Image(fig)})
-    #%%
-    """Classification"""
-    if config["dataset"] == "covtype":
-        target = 'Cover_Type'
-    elif config["dataset"] == "credit":
-        target = 'TARGET'
-    elif config["dataset"] == "loan":
-        target = 'Personal Loan'
-    elif config["dataset"] == "adult":
-        target = 'income'
-    elif config["dataset"] == "cabs":
-        target = 'Surge_Pricing_Type'
-    elif config["dataset"] == "kings":
-        target = 'condition'
-    else:
-        raise ValueError('Not supported dataset!')
-    #%%
-    # baseline
-    print("\nBaseline: Machine Learning Utility in Classification...\n")
-    base_clf = classification_eval(dataset.train, test_dataset.test, target)
-    wandb.log({'F1 (Baseline)': np.mean([x[1] for x in base_clf])})
-    #%%
-    ITS_scaled = ITS.copy()
-    ITS_scaled[dataset.continuous] = (ITS_scaled[dataset.continuous] - ITS_mean[dataset.continuous]) / ITS_std[dataset.continuous]
-    
-    # Inverse Transform Sampling
-    print("\nSynthetic: Machine Learning Utility in Classification...\n")
-    clf = classification_eval(ITS_scaled, test_dataset.test, target)
-    wandb.log({'F1': np.mean([x[1] for x in clf])})
-    #%%
-    # # visualization
-    # fig = plt.figure(figsize=(5, 4))
-    # plt.plot([x[1] for x in base_clf], 'o--', label='baseline')
-    # plt.plot([x[1] for x in clf], 'o--', label='synthetic')
-    # plt.ylim(0, 1)
-    # plt.ylabel('$F_1$', fontsize=13)
-    # plt.xticks([0, 1, 2], [x[0] for x in base_clf], fontsize=13)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/{}_MLU_classification.png'.format(config["dataset"], config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
+    for k, v in enumerate(dataset.continuous):
+        ax.flatten()[k].plot(x_linspace[k], alpha_cal2[k], label="calibration")
+        emp = [stats.percentileofscore(
+            df[dataset.continuous].to_numpy()[:, k],
+            x) * 0.01 for x in x_linspace[k]]
+        ax.flatten()[k].plot(x_linspace[k], emp, label="empirical")
+        # ax.flatten()[k].plot(np.quantile(df[dataset.continuous].to_numpy()[:, k], q=q), q, label="empirical")
+        ax.flatten()[k].set_xlabel(v)
+        ax.flatten()[k].set_ylabel('alpha')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('./assets/{}/{}_CDF_calibration.png'.format(config["dataset"], config["dataset"]))
+    plt.show()
+    plt.close()
+    wandb.log({'CDF calibration': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
