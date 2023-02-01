@@ -113,15 +113,15 @@ def main():
                 mean, logvar = model.get_posterior(x_batch)
             latents.append(mean)
         latents = torch.cat(latents, dim=0).numpy()
-        labeles = dataset.train['TARGET_1'].to_numpy()
+        labels = dataset.train['TARGET_1'].to_numpy()
         #%%
         plt.figure(figsize=(5, 5))
         plt.scatter(
-            latents[labeles == 0, 0], latents[labeles == 0, 1],
+            latents[labels == 0, 0], latents[labels == 0, 1],
             s=25, c='blue', alpha=0.5,
             label="0")
         plt.scatter(
-            latents[labeles == 1, 0], latents[labeles == 1, 1],
+            latents[labels == 1, 0], latents[labels == 1, 1],
             s=25, c='red', alpha=0.5,
             label="1")
         plt.xlim(-4, 4)
@@ -140,7 +140,7 @@ def main():
         plt.figure(figsize=(5, 5))
         plt.bar(
             [0, 1], 
-            [(labeles == 0).mean(), (labeles == 1).mean()])
+            [(labels == 0).mean(), (labels == 1).mean()])
         plt.xticks([0, 1], ["0", "1"])
         plt.ylim(0, 1)
         plt.xticks(fontsize=14)
