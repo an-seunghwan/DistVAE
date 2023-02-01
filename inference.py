@@ -139,7 +139,6 @@ def main():
             'Age',
             'Experience',
             'Income', 
-            'CCAvg',
             'Mortgage']
         
     elif config["dataset"] == "adult":
