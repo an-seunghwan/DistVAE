@@ -183,9 +183,12 @@ def main():
     
     fig, ax = plt.subplots(1, 1, figsize=(7, 4))
     
-    ax.plot(x_linspace_est, alpha_est, label="estimate")
-    ax.step(x_linspace, alpha_mono, label="calibration")
-    ax.step(x_linspace, emp, label="empirical")
+    ax.step(x_linspace, emp, label="empirical",
+            linewidth=3.5)
+    ax.step(x_linspace, alpha_mono, label="calibration",
+            linewidth=3.5, linestyle='--')
+    ax.plot(x_linspace_est, alpha_est, label="estimate",
+            linewidth=3.5)
     ax.set_xlabel(dataset.continuous[j], fontsize=14)
     ax.set_ylabel('alpha', fontsize=14)
     
