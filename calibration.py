@@ -19,7 +19,7 @@ from torch.utils.data import Dataset
 from modules.simulation import set_random_seed
 from modules.model import VAE
 
-from scipy import stats
+from statsmodels.distributions.empirical_distribution import ECDF
 #%%
 import sys
 import subprocess
@@ -44,8 +44,8 @@ def get_args(debug):
     
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
-    parser.add_argument('--dataset', type=str, default='covtype', 
-                        help='Dataset options: supports only covtype!')
+    parser.add_argument('--dataset', type=str, default='adult', 
+                        help='Dataset options: supports only adult!')
 
     if debug:
         return parser.parse_args(args=[])
@@ -54,7 +54,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
@@ -104,29 +104,24 @@ def main():
     model.eval()
     #%%
     """real data: covtype dataset"""
-    base = pd.read_csv('./data/covtype.csv')
+    base = pd.read_csv('./data/adult.csv')
     base = base.sample(frac=1, random_state=0).reset_index(drop=True)
-    base = base.dropna(axis=0)
-    base = base.iloc[:50000]
+    base = base[(base == '?').sum(axis=1) == 0]
     
     continuous = [
-        'Elevation', # target variable
-        'Aspect', 
-        'Slope',
-        'Horizontal_Distance_To_Hydrology', 
-        'Vertical_Distance_To_Hydrology',
-        'Horizontal_Distance_To_Roadways',
-        'Hillshade_9am',
-        'Hillshade_Noon',
-        'Hillshade_3pm',
-        'Horizontal_Distance_To_Fire_Points',
+        'age',
+        'educational-num',
+        'capital-gain', 
+        'capital-loss', 
+        'hours-per-week',
     ]
     base = base[continuous]
+    base = base.dropna()
     
-    df = base.iloc[:45000] # train
+    df = base.iloc[:40000]
     #%%
     MC = 5000
-    j = 2 # Slope
+    j = 1 # educational-num
     
     """Quantile Estimation with sampling mechanism"""
     n = 100
@@ -148,7 +143,7 @@ def main():
     x_linspace_est = x_linspace_est * dataset.std[j] + dataset.mean[j]
     #%%
     """Calibration Step 1. Estimate F(x + 0.5), F(x - 0.5)"""
-    x_linspace = [np.arange(x-0.5, y+0.5, 1) for x, y in zip(
+    x_linspace = [np.arange(x, y+2, 1) - 0.5 for x, y in zip(
         [np.quantile(df.to_numpy()[:, j], q=0.01)],
         [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     
@@ -164,7 +159,7 @@ def main():
             alpha_hat += alpha_tilde
     alpha_hat /= MC
     
-    x_linspace = [np.arange(x, y, 1) for x, y in zip(
+    x_linspace = [np.arange(x, y+1, 1) for x, y in zip(
         [np.quantile(df.to_numpy()[:, j], q=0.01)],
         [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     #%%
@@ -172,23 +167,24 @@ def main():
     alpha_cal = []
     for i in range(len(alpha_hat)-1):
         alpha_cal.append((alpha_hat[i+1] - alpha_hat[i]).item())
+    alpha_cal /= np.sum(alpha_cal)
     alpha_cal = np.cumsum(alpha_cal)
     #%%
     """Calibration Step 3. Ensure monotonicity"""
-    alpha_mono = [0]
+    alpha_mono = [alpha_cal[0]]
     for i in range(1, len(alpha_cal)):
         if alpha_cal[i] < alpha_mono[-1]:
             alpha_mono.append(alpha_mono[-1])
         else:
             alpha_mono.append(alpha_cal[i])
     #%%
+    ecdf = ECDF(df[dataset.continuous].to_numpy()[:, j])
+    emp = [ecdf(x) for x in x_linspace]
+    
     fig, ax = plt.subplots(1, 1, figsize=(7, 4))
     
     ax.plot(x_linspace_est, alpha_est, label="estimate")
     ax.step(x_linspace, alpha_mono, label="calibration")
-    emp = [stats.percentileofscore(
-        df[dataset.continuous].to_numpy()[:, j],
-        x) * 0.01 for x in x_linspace]
     ax.step(x_linspace, emp, label="empirical")
     ax.set_xlabel(dataset.continuous[j], fontsize=14)
     ax.set_ylabel('alpha', fontsize=14)
