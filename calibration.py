@@ -184,18 +184,20 @@ def main():
     fig, ax = plt.subplots(1, 1, figsize=(7, 4))
     
     ax.step(x_linspace, emp, label="empirical",
-            linewidth=3.5)
+            linewidth=3.5, color=u'#ff7f0e')
     ax.step(x_linspace, alpha_mono, label="calibration",
-            linewidth=3.5, linestyle='--')
+            linewidth=3.5, linestyle='--', color=u'#1f77b4')
     ax.plot(x_linspace_est, alpha_est, label="estimate",
-            linewidth=3.5)
+            linewidth=3.5, color=u'#2ca02c')
     ax.set_xlabel(dataset.continuous[j], fontsize=14)
-    ax.set_ylabel('alpha', fontsize=14)
+    # ax.set_ylabel('alpha', fontsize=14)
+    ax.tick_params(axis='x', labelsize=14)
+    ax.tick_params(axis='y', labelsize=14)
     
-    plt.legend(fontsize=13)
+    plt.legend(fontsize=14)
     plt.tight_layout()
     plt.savefig('./assets/{}/{}_CDF_calibration.png'.format(config["dataset"], config["dataset"]))
-    # plt.show()
+    plt.show()
     plt.close()
     wandb.log({'CDF calibration': wandb.Image(fig)})
     #%%
