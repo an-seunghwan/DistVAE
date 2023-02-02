@@ -19,7 +19,7 @@ from torch.utils.data import Dataset
 from modules.simulation import set_random_seed
 from modules.model import VAE
 
-from scipy import stats
+from statsmodels.distributions.empirical_distribution import ECDF
 #%%
 import sys
 import subprocess
@@ -180,9 +180,8 @@ def main():
             [np.quantile(orig.to_numpy()[:, k], q=0.01)],
             [np.quantile(orig.to_numpy()[:, k], q=0.99)])][0]
         if v in integer:
-            emp = [stats.percentileofscore(
-                orig.to_numpy()[:, dataset.continuous.index(v)],
-                x.item()) * 0.01 for x in x_linspace_orig]
+            ecdf = ECDF(orig[dataset.continuous].to_numpy()[:, k])
+            emp = [ecdf(x) for x in x_linspace_orig]
             ax.flatten()[k].step((x_linspace_orig - dataset.mean[k]) / dataset.std[k], 
                                  emp, 
                                  label="empirical")
