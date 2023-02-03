@@ -20,6 +20,7 @@ from modules.simulation import set_random_seed
 from modules.model import VAE
 
 from statsmodels.distributions.empirical_distribution import ECDF
+from scipy import interpolate
 #%%
 import sys
 import subprocess
@@ -78,8 +79,8 @@ def main():
     dataset_module = importlib.import_module('modules.{}_datasets'.format(config["dataset"]))
     TabularDataset = dataset_module.TabularDataset
     
-    dataset = TabularDataset(config)
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
+    dataset = TabularDataset()
+    test_dataset = TabularDataset(train=False)
     
     OutputInfo_list = dataset.OutputInfo_list
     CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
@@ -108,6 +109,10 @@ def main():
         [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
         [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
         n)
+    # x_linspace = np.linspace(
+    #     [np.min(dataset.x_data[:, k]) for k in range(len(dataset.continuous))],
+    #     [np.max(dataset.x_data[:, k]) for k in range(len(dataset.continuous))],
+    #     n)
     x_linspace = torch.from_numpy(x_linspace)
     
     alpha_hat = torch.zeros((n, len(dataset.continuous)))
@@ -118,6 +123,39 @@ def main():
             alpha_tilde_list = model.quantile_inverse(x_linspace, gamma, beta)
             alpha_hat += torch.cat(alpha_tilde_list, dim=1)
     alpha_hat /= MC
+    #%%
+    """alpha-rate"""
+    alpha_levels = np.array([0.1, 0.3, 0.5, 0.7, 0.9])
+    alpha_rate = []
+    for j in range(len(dataset.continuous)):
+        tmp = []
+        for alpha in alpha_levels:
+            if len(np.where(alpha_hat[:, j] < alpha)[0]):
+                cut1 = np.where(alpha_hat[:, j] < alpha)[0][-1]
+            else:
+                cut1 = 0
+            if len(np.where(alpha < alpha_hat[:, j])[0]):
+                cut2 = np.where(alpha < alpha_hat[:, j])[0][0]
+            else:
+                cut2 = -1
+            
+            f_inter = interpolate.interp1d(
+                [alpha_hat[cut1, j], alpha_hat[cut2, j]],
+                [x_linspace[:, j][cut1], x_linspace[:, j][cut2]])
+            try:
+                tmp.append((test_dataset.x_data[:, j] <= f_inter(alpha)).mean())
+            except:
+                tmp.append((test_dataset.x_data[:, j] <= x_linspace[:, j][cut2].item()).mean())
+        alpha_rate.append(tmp)
+    alpha_rate = np.array(alpha_rate).mean(axis=0)
+    #%%
+    pd.DataFrame(
+        np.concatenate([
+            alpha_rate[None, :],
+            np.abs(alpha_rate - alpha_levels)[None, :]
+        ], axis=0).round(3),
+        columns=[str(x) for x in alpha_levels]
+    ).to_csv('./assets/{}/{}_alpha_rate.csv'.format(config["dataset"], config["dataset"]))
     #%%
     if config["dataset"] == "covtype":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
@@ -177,6 +215,9 @@ def main():
         x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
             [np.quantile(orig.to_numpy()[:, k], q=0.01)],
             [np.quantile(orig.to_numpy()[:, k], q=0.99)])][0]
+        # x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
+        #     [np.min(orig.to_numpy()[:, k])],
+        #     [np.max(orig.to_numpy()[:, k])])][0]
         if v in integer:
             ecdf = ECDF(orig[dataset.continuous].to_numpy()[:, k])
             emp = [ecdf(x) for x in x_linspace_orig]

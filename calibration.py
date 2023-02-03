@@ -125,9 +125,13 @@ def main():
     
     """Quantile Estimation with sampling mechanism"""
     n = 100
+    # x_linspace_est = np.linspace(
+    #     np.quantile(dataset.x_data[:, j], q=0.01),
+    #     np.quantile(dataset.x_data[:, j], q=0.99),
+    #     n)
     x_linspace_est = np.linspace(
-        np.quantile(dataset.x_data[:, j], q=0.01),
-        np.quantile(dataset.x_data[:, j], q=0.99),
+        np.min(dataset.x_data[:, j]),
+        np.max(dataset.x_data[:, j]),
         n)
     
     alpha_est = torch.zeros((len(x_linspace_est), 1))
@@ -143,9 +147,12 @@ def main():
     x_linspace_est = x_linspace_est * dataset.std[j] + dataset.mean[j]
     #%%
     """Calibration Step 1. Estimate F(x + 0.5), F(x - 0.5)"""
+    # x_linspace = [np.arange(x, y+2, 1) - 0.5 for x, y in zip(
+    #     [np.quantile(df.to_numpy()[:, j], q=0.01)],
+    #     [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     x_linspace = [np.arange(x, y+2, 1) - 0.5 for x, y in zip(
-        [np.quantile(df.to_numpy()[:, j], q=0.01)],
-        [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
+        [np.min(df.to_numpy()[:, j])],
+        [np.max(df.to_numpy()[:, j])])][0]
     
     alpha_hat = torch.zeros((len(x_linspace), 1))
     for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
@@ -159,9 +166,12 @@ def main():
             alpha_hat += alpha_tilde
     alpha_hat /= MC
     
+    # x_linspace = [np.arange(x, y+1, 1) for x, y in zip(
+    #     [np.quantile(df.to_numpy()[:, j], q=0.01)],
+    #     [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     x_linspace = [np.arange(x, y+1, 1) for x, y in zip(
-        [np.quantile(df.to_numpy()[:, j], q=0.01)],
-        [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
+        [np.min(df.to_numpy()[:, j])],
+        [np.max(df.to_numpy()[:, j])])][0]
     #%%
     """Calibration Step 2. Discretization F^*(x) = F^*(x-1) + F(x+0.5) - F(x-0.5)"""
     alpha_cal = []
