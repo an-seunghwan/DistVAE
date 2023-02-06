@@ -19,6 +19,7 @@ from torch.utils.data import Dataset
 from modules.simulation import set_random_seed
 from modules.model import VAE
 from modules.evaluation import (
+    merge_discrete,
     regression_eval,
     classification_eval,
     goodness_of_fit,
@@ -129,22 +130,41 @@ def main():
     ITS_scaled = ITS.copy()
     ITS_scaled[dataset.continuous] = (ITS[dataset.continuous] - ITS_mean) / ITS_std
     #%%
-    """Goodness of Fit""" # only continuous
+    """Goodness of Fit""" 
     print("\nGoodness of Fit...\n")
     
-    Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS_scaled.to_numpy())
+    cut_points = merge_discrete(dataset.train.to_numpy(), config["CRPS_dim"])
+    ITS_cut_points = merge_discrete(ITS_scaled.to_numpy(), config["CRPS_dim"])
     
-    print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
-    print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
-    wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
-    wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
+    Dn, W1 = goodness_of_fit(config["CRPS_dim"], dataset.train.to_numpy(), ITS_scaled.to_numpy(), cut_points, ITS_cut_points)
+    cont_Dn = np.mean(Dn[:config["CRPS_dim"]])
+    disc_Dn = np.mean(Dn[config["CRPS_dim"]:])
+    cont_W1 = np.mean(W1[:config["CRPS_dim"]])
+    disc_W1 = np.mean(W1[config["CRPS_dim"]:])
+    
+    print('K-S (continuous): {:.3f}'.format(cont_Dn))
+    print('K-S (discrete): {:.3f}'.format(disc_Dn))
+    print('1-WD (continuous): {:.3f}'.format(cont_W1))
+    print('1-WD (discrete): {:.3f}'.format(disc_W1))
+    wandb.log({'K-S (continuous)': cont_Dn})
+    wandb.log({'K-S (discrete)': disc_Dn})
+    wandb.log({'1-WD (continuous)': cont_W1})
+    wandb.log({'1-WD (discrete)': disc_W1})
+    
+    # Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS_scaled.to_numpy())
+    
+    # print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
+    # print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
+    # wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
+    # wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
     #%%
     """Privacy Preservability""" # only continuous
     print("\nPrivacy Preservability...\n")
     
     privacy = privacy_metrics(dataset.train[dataset.continuous], ITS_scaled[dataset.continuous])
     
-    DCR = privacy[0, :3]
+    DCR = privacy
+    # DCR = privacy[0, :3]
     print('DCR (R&S): {:.3f}'.format(DCR[0]))
     print('DCR (R): {:.3f}'.format(DCR[1]))
     print('DCR (S): {:.3f}'.format(DCR[2]))
@@ -152,16 +172,13 @@ def main():
     wandb.log({'DCR (R)': DCR[1]})
     wandb.log({'DCR (S)': DCR[2]})
     
-    NNDR = privacy[0, 3:]
-    print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
-    print('NNDR (R): {:.3f}'.format(NNDR[1]))
-    print('NNDR (S): {:.3f}'.format(NNDR[2]))
-    wandb.log({'NNDR (R&S)': NNDR[0]})
-    wandb.log({'NNDR (R)': NNDR[1]})
-    wandb.log({'NNDR (S)': NNDR[2]})
-    #%%
-    # dataset.train[dataset.continuous].hist(figsize=(10, 10))
-    # ITS[dataset.continuous].hist(figsize=(10, 10))
+    # NNDR = privacy[0, 3:]
+    # print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
+    # print('NNDR (R): {:.3f}'.format(NNDR[1]))
+    # print('NNDR (S): {:.3f}'.format(NNDR[2]))
+    # wandb.log({'NNDR (R&S)': NNDR[0]})
+    # wandb.log({'NNDR (R)': NNDR[1]})
+    # wandb.log({'NNDR (S)': NNDR[2]})
     #%%
     """Regression"""
     if config["dataset"] == "covtype":
