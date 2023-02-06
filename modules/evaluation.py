@@ -20,6 +20,14 @@ from scipy.stats import wasserstein_distance
 
 from sklearn import metrics
 #%%
+def merge_discrete(data, cont_dim):
+    data = data[:, cont_dim:]
+    cut_points = [0]
+    for j in range(1, data.shape[1] + 1):
+        if np.sum(data[:, cut_points[-1]:j]) == len(data):
+            cut_points.append(j)
+    return cut_points[1:]
+#%%
 def regression_eval(train, test, target):
     covariates = [x for x in train.columns if x not in [target]]
     
@@ -44,26 +52,6 @@ def regression_eval(train, test, target):
         print("[{}] MARE: {:.3f}".format(name, mare))
     return result
 #%%
-# def regression_eval(train, test, target):
-#     covariates = [x for x in train.columns if x not in [target]]
-    
-#     result = []
-#     for name, regr in [
-#         ('linear', LinearRegression(fit_intercept=False)), 
-#         ('RF', RandomForestRegressor(random_state=0)), 
-#         ('GradBoost', GradientBoostingRegressor(random_state=0))]:
-        
-#         regr.fit(train[covariates], train[target])
-#         pred = regr.predict(test[covariates])
-        
-#         rsq = (test[target] - pred).pow(2).sum()
-#         rsq /= np.var(test[target]) * len(test)
-#         rsq = 1 - rsq
-        
-#         result.append((name, rsq))
-#         print("[{}] R^2: {:.3f}".format(name, rsq))
-#     return result
-#%%
 def classification_eval(train, test, target):
     covariates = [x for x in train.columns if not x.startswith(target)]
     target_ = [x for x in train.columns if x.startswith(target)]
@@ -85,10 +73,10 @@ def classification_eval(train, test, target):
         print("[{}] F1: {:.3f}".format(name, f1))
     return result
 #%%
-def goodness_of_fit(config, train, synthetic):
+def goodness_of_fit(cont_dim, train, synthetic, cut_points1, cut_points2):
     Dn_list = []
     W1_list = []
-    for j in range(config["CRPS_dim"]):
+    for j in range(cont_dim):
         xj = train[:, j]
         ecdf = ECDF(xj)
         ecdf_hat = ECDF(synthetic[:, j])
@@ -98,9 +86,42 @@ def goodness_of_fit(config, train, synthetic):
         
         Dn_list.append(Dn)
         W1_list.append(W1)
-    Dn = np.mean(Dn_list)
-    W1 = np.mean(W1_list)
-    return Dn, W1
+    
+    st1 = 0
+    st2 = 0
+    for j in range(len(cut_points1)):
+        ed1 = cut_points1[j]
+        ed2 = cut_points2[j]
+        xj = train[:, cont_dim + st1 : cont_dim + ed1]
+        ITS_xj = synthetic[:, cont_dim + st2 : cont_dim + ed2]
+        ecdf = ECDF(xj.argmax(axis=1))
+        ecdf_hat = ECDF(ITS_xj.argmax(axis=1))
+        
+        Dn = np.abs(ecdf(xj.argmax(axis=1)) - ecdf_hat(xj.argmax(axis=1))).max()
+        W1 = wasserstein_distance(xj.argmax(axis=1), ITS_xj.argmax(axis=1))
+        st1 = ed1
+        st2 = ed2
+        
+        Dn_list.append(Dn)
+        W1_list.append(W1)
+    return Dn_list, W1_list
+#%%
+# def goodness_of_fit(config, train, synthetic):
+#     Dn_list = []
+#     W1_list = []
+#     for j in range(config["CRPS_dim"]):
+#         xj = train[:, j]
+#         ecdf = ECDF(xj)
+#         ecdf_hat = ECDF(synthetic[:, j])
+
+#         Dn = np.abs(ecdf(xj) - ecdf_hat(xj)).max()
+#         W1 = wasserstein_distance(xj, synthetic[:, j])
+        
+#         Dn_list.append(Dn)
+#         W1_list.append(W1)
+#     Dn = np.mean(Dn_list)
+#     W1 = np.mean(W1_list)
+#     return Dn, W1
 #%%
 def privacy_metrics(train, synthetic, data_percent=15):
     
@@ -152,12 +173,13 @@ def privacy_metrics(train, synthetic, data_percent=15):
     fifth_perc_rr = np.percentile(min_dist_rr,5)
     min_dist_ff = np.array([i[0] for i in smallest_two_ff])
     fifth_perc_ff = np.percentile(min_dist_ff,5)
-    nn_ratio_rf = np.array([i[0]/i[1] for i in smallest_two_rf])
-    nn_fifth_perc_rf = np.percentile(nn_ratio_rf,5)
-    nn_ratio_rr = np.array([i[0]/i[1] for i in smallest_two_rr])
-    nn_fifth_perc_rr = np.percentile(nn_ratio_rr,5)
-    nn_ratio_ff = np.array([i[0]/i[1] for i in smallest_two_ff])
-    nn_fifth_perc_ff = np.percentile(nn_ratio_ff,5)
-        
-    return np.array([fifth_perc_rf,fifth_perc_rr,fifth_perc_ff,nn_fifth_perc_rf,nn_fifth_perc_rr,nn_fifth_perc_ff]).reshape(1,6) 
+    # nn_ratio_rf = np.array([i[0]/i[1] for i in smallest_two_rf])
+    # nn_fifth_perc_rf = np.percentile(nn_ratio_rf,5)
+    # nn_ratio_rr = np.array([i[0]/i[1] for i in smallest_two_rr])
+    # nn_fifth_perc_rr = np.percentile(nn_ratio_rr,5)
+    # nn_ratio_ff = np.array([i[0]/i[1] for i in smallest_two_ff])
+    # nn_fifth_perc_ff = np.percentile(nn_ratio_ff,5)
+    
+    return [fifth_perc_rf,fifth_perc_rr,fifth_perc_ff]
+    # return np.array([fifth_perc_rf,fifth_perc_rr,fifth_perc_ff,nn_fifth_perc_rf,nn_fifth_perc_rr,nn_fifth_perc_ff]).reshape(1,6) 
 #%%
