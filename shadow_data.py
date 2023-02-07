@@ -10,9 +10,6 @@ from PIL import Image
 import matplotlib.pyplot as plt
 # plt.switch_backend('agg')
 
-import sys
-sys.path.append('../')
-
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -110,10 +107,16 @@ def main():
     m = len(test_dataset.test)
     for s in tqdm.tqdm(range(10), desc="Generating shadow train and test datasets..."):
         torch.manual_seed(s)
+        # train
         with torch.no_grad():
-            samples = model.generate_data(n + m, OutputInfo_list)
+            samples = model.generate_data(n, OutputInfo_list)
         ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
-        ITS.to_csv(f'./privacy/{config["dataset"]}/{config["num"]}_synthetic{s}.csv')
+        ITS.to_csv(f'./privacy/{config["dataset"]}/train_{config["seed"]}_synthetic{s}.csv')
+        # test
+        with torch.no_grad():
+            samples = model.generate_data(m, OutputInfo_list)
+        ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
+        ITS.to_csv(f'./privacy/{config["dataset"]}/test_{config["seed"]}_synthetic{s}.csv')
     #%%
     wandb.run.finish()
 #%%
