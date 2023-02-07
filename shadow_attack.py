@@ -19,6 +19,8 @@ from torch.utils.data import Dataset
 from modules.simulation import set_random_seed
 from modules.model import VAE
 from modules.train import train_VAE
+
+from sklearn.metrics import precision_score, recall_score
 #%%
 import sys
 import subprocess
@@ -38,42 +40,14 @@ run = wandb.init(
 )
 #%%
 import argparse
-import ast
-
-def arg_as_list(s):
-    v = ast.literal_eval(s)
-    if type(v) is not list:
-        raise argparse.ArgumentTypeError("Argument \"%s\" is not a list" % (s))
-    return v
-
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--seed', type=int, default=1, 
-                        help='seed for repeatable results')
+    parser.add_argument('--num', type=int, default=0, 
+                        help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    
-    # model configurations
-    parser.add_argument("--latent_dim", default=2, type=int,
-                        help="the number of latent codes")
-    parser.add_argument("--step", default=0.1, type=float,
-                        help="interval size of quantile levels")
-    
-    # optimization options
-    parser.add_argument('--epochs', default=100, type=int,
-                        help='maximum iteration')
-    parser.add_argument('--batch_size', default=256, type=int,
-                        help='batch size')
-    parser.add_argument('--lr', default=1e-3, type=float,
-                        help='learning rate')
-    parser.add_argument('--threshold', default=1e-5, type=float,
-                        help='threshold for clipping alpha_tilde')
-    
-    # loss coefficients
-    parser.add_argument('--beta', default=0.1, type=float,
-                        help='observation noise')
-  
+
     if debug:
         return parser.parse_args(args=[])
     else:    
@@ -82,6 +56,20 @@ def get_args(debug):
 def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
+    
+    """model load"""
+    model_dirs = []
+    for n in tqdm.tqdm(range(10), desc="Loading trained shadow models..."):
+        num = config["num"] * 10 + n
+        artifact = wandb.use_artifact('anseunghwan/DistVAE/shadow_DistVAE_{}:v{}'.format(config["dataset"], num), type='model')
+        for key, item in artifact.metadata.items():
+            config[key] = item
+        model_dir = artifact.download()
+        model_dirs.append(model_dir)
+    
+    if not os.path.exists('./privacy/{}'.format(config["dataset"])):
+        os.makedirs('./privacy/{}'.format(config["dataset"]))
+    
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     wandb.config.update(config)
@@ -96,68 +84,199 @@ def main():
     TabularDataset = dataset_module.TabularDataset
     
     dataset = TabularDataset()
+    test_dataset = TabularDataset(train=False)
+    
     OutputInfo_list = dataset.OutputInfo_list
     CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
     softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
     config["CRPS_dim"] = CRPS_dim
     config["softmax_dim"] = softmax_dim
     #%%
-    """shadow training and test datasets"""
-    class ShadowTabularDataset(Dataset): 
-        def __init__(self, shadow_data):
-            self.x_data = shadow_data.to_numpy()
-            
-        def __len__(self): 
-            return len(self.x_data)
-
-        def __getitem__(self, idx): 
-            x = torch.FloatTensor(self.x_data[idx])
-            return x
-    
-    shadow_data = []
-    for s in range(10):
-        df = pd.read_csv(f'./privacy/{config["dataset"]}/train_{config["seed"]}_synthetic{s}.csv', index_col=0)
-        shadow_data.append(ShadowTabularDataset(df))
-    # shadow_data_test = []
-    # for s in range(10):
-    #     df = pd.read_csv(f'./privacy/{config["dataset"]}/test_{config["seed"]}_synthetic{s}.csv', index_col=0)
-    #     shadow_data_test.append(ShadowTabularDataset(df))
-    #%%
-    for k in range(len(shadow_data)):
-        print(f"Training {k}th shadow model...\n")
+    for k in range(len(model_dirs)):
+        model_dir = model_dirs[k]
         
         model = VAE(config, device).to(device)
+        if config["cuda"]:
+            model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+            model.load_state_dict(
+                torch.load(
+                    model_dir + '/' + model_name))
+        else:
+            model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+            model.load_state_dict(
+                torch.load(
+                    model_dir + '/' + model_name, map_location=torch.device('cpu')))
         
-        optimizer = torch.optim.Adam(
-            model.parameters(), 
-            lr=config["lr"]
-        )
+        model.eval()
+        #%%
+        if config["dataset"] == "covtype":
+            target = 'Cover_Type'
+        elif config["dataset"] == "credit":
+            target = 'TARGET'
+        elif config["dataset"] == "loan":
+            target = 'Personal Loan'
+        elif config["dataset"] == "adult":
+            target = 'income'
+        elif config["dataset"] == "cabs":
+            target = 'Surge_Pricing_Type'
+        elif config["dataset"] == "kings":
+            target = 'condition'
+        else:
+            raise ValueError('Not supported dataset!')
+        #%%
+        # shadow data
+        class ShadowTabularDataset(Dataset): 
+            def __init__(self, shadow_data):
+                self.x_data = shadow_data.to_numpy()
+                
+            def __len__(self): 
+                return len(self.x_data)
+
+            def __getitem__(self, idx): 
+                x = torch.FloatTensor(self.x_data[idx])
+                return x
         
-        model.train()
-        
-        dataloader = DataLoader(shadow_data[k], batch_size=config["batch_size"], shuffle=True)
-        
-        for epoch in range(config["epochs"]):
-            logs = train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device)
+        targets = []
+        shadow_data = []
+        for k in range(len(model_dirs)):
+            df = pd.read_csv(f'./privacy/{config["dataset"]}/train_{config["seed"]}_synthetic{k}.csv', index_col=0)
+            targets.append(df[[x for x in df.columns if x.startswith(target)]].to_numpy().argmax(axis=1))
+            shadow_data.append(ShadowTabularDataset(df))
+        targets_test = []
+        shadow_data_test = []
+        for k in range(len(model_dirs)):
+            df = pd.read_csv(f'./privacy/{config["dataset"]}/test_{config["seed"]}_synthetic{k}.csv', index_col=0)
+            targets_test.append(df[[x for x in df.columns if x.startswith(target)]].to_numpy().argmax(axis=1))
+            shadow_data_test.append(ShadowTabularDataset(df))
+        #%%
+        """training latent variables"""
+        latents = []
+        for k in range(len(model_dirs)):
+            dataloader = DataLoader(shadow_data[k], batch_size=config["batch_size"], shuffle=False)
             
-            print_input = "[epoch {:03d}]".format(epoch + 1)
-            print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
-            print(print_input)
+            zs = []
+            for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
+                if config["cuda"]:
+                    x_batch = x_batch.cuda()
+                with torch.no_grad():
+                    mean, logvar = model.get_posterior(x_batch)
+                zs.append(mean)
+            zs = torch.cat(zs, dim=0)
+            latents.append(zs)
+        #%%
+        """test latent variables"""
+        latents_test = []
+        for k in range(len(model_dirs)):
+            dataloader = DataLoader(shadow_data_test[k], batch_size=config["batch_size"], shuffle=False)
             
-            """update log"""
-            wandb.log({x : np.mean(y) for x, y in logs.items()})
-    
-        """model save"""
-        torch.save(model.state_dict(), './assets/shadow_DistVAE_{}.pth'.format(config["dataset"]))
-        artifact = wandb.Artifact('shadow_DistVAE_{}'.format(config["dataset"]), 
-                                type='model',
-                                metadata=config) # description=""
-        artifact.add_file('./assets/shadow_DistVAE_{}.pth'.format(config["dataset"]))
-        artifact.add_file('./main.py')
-        artifact.add_file('./modules/model.py')
-        wandb.log_artifact(artifact)
+            zs = []
+            for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
+                if config["cuda"]:
+                    x_batch = x_batch.cuda()
+                with torch.no_grad():
+                    mean, logvar = model.get_posterior(x_batch)
+                zs.append(mean)
+            zs = torch.cat(zs, dim=0)
+            latents_test.append(zs)
+        #%%
+        """attack training records"""
+        target_num = dataset.train[[x for x in df.columns if x.startswith(target)]].shape[1]
+        attack_training = {}
+        for t in range(target_num):
+            tmp1 = []
+            for k in range(len(model_dirs)):
+                tmp1.append(latents[k].numpy()[[targets[k] == t][0], :])
+            tmp1 = np.concatenate(tmp1, axis=0)
+            tmp1 = np.concatenate([tmp1, np.ones((len(tmp1), 1))], axis=1)
+            
+            tmp2 = []
+            for k in range(len(model_dirs)):
+                tmp2.append(latents_test[k].numpy()[[targets_test[k] == t][0], :])
+            tmp2 = np.concatenate(tmp2, axis=0)
+            tmp2 = np.concatenate([tmp2, np.zeros((len(tmp2), 1))], axis=1)
+            
+            tmp = np.concatenate([tmp1, tmp2], axis=0)
+            
+            attack_training[t] = tmp
+        #%%
+        """training attack model"""
+        from sklearn.ensemble import GradientBoostingClassifier
+        attackers = {}
+        for k in range(target_num):
+            clf = GradientBoostingClassifier(random_state=0).fit(
+                attack_training[k][:, :config["latent_dim"]], 
+                attack_training[k][:, -1])
+            attackers[k] = clf
+        #%%
+        artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["seed"]), type='model')
+        for key, item in artifact.metadata.items():
+            config[key] = item
+        model_dir = artifact.download()
+        
+        model = VAE(config, device).to(device)
+        if config["cuda"]:
+            model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+            model.load_state_dict(
+                torch.load(
+                    model_dir + '/' + model_name))
+        else:
+            model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
+            model.load_state_dict(
+                torch.load(
+                    model_dir + '/' + model_name, map_location=torch.device('cpu')))
+        
+        model.eval()
+        
+        dataset = TabularDataset()
+        test_dataset = TabularDataset(train=False)
+        dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
+        test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=False)
+        #%%
+        """Ground-truth training latent variables"""
+        gt_latents = []
+        for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
+            if config["cuda"]:
+                x_batch = x_batch.cuda()
+            with torch.no_grad():
+                mean, logvar = model.get_posterior(x_batch)
+            gt_latents.append(mean)
+        gt_latents = torch.cat(gt_latents, dim=0)
+        #%%
+        """Ground-truth test latent variables"""
+        gt_latents_test = []
+        for (x_batch) in tqdm.tqdm(iter(test_dataloader), desc="inner loop"):
+            if config["cuda"]:
+                x_batch = x_batch.cuda()
+            with torch.no_grad():
+                mean, logvar = model.get_posterior(x_batch)
+            gt_latents_test.append(mean)
+        gt_latents_test = torch.cat(gt_latents_test, dim=0)
+        #%%
+        """attacker accuracy"""
+        gt_targets = dataset.train[[x for x in df.columns if x.startswith(target)]].to_numpy().argmax(axis=1)
+        gt_targets_test = test_dataset.test[[x for x in df.columns if x.startswith(target)]].to_numpy().argmax(axis=1)
+        
+        gt_latents = gt_latents[:len(gt_latents_test), :]
+        gt_targets = gt_targets[:len(gt_latents_test)]
+        
+        pred = []
+        for t in range(target_num):
+            pred.append(attackers[t].predict(gt_latents[gt_targets == t]))
+        for t in range(target_num):
+            pred.append(attackers[t].predict(gt_latents_test[gt_targets_test == t]))
+        pred = np.concatenate(pred)
+        
+        gt = np.zeros((len(pred), ))
+        gt[:len(gt_latents)] = 1
+        
+        precision = precision_score(gt, pred)
+        recall = recall_score(gt, pred)
+        
+        print('MI Precision:', precision)
+        print('MI Recacll:', recall)
+        wandb.log({'MI Precision' : precision})
+        wandb.log({'MI Recacll' : recall})
     #%%    
-    wandb.config.update(config, allow_val_change=True)
     wandb.run.finish()
 #%%
 if __name__ == '__main__':
