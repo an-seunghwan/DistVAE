@@ -1,5 +1,6 @@
 #%%
 import numpy as np
+import tqdm
 #%%
 import statsmodels.api as sm
 from sklearn.linear_model import (
@@ -14,6 +15,8 @@ from sklearn.ensemble import (
 )
 
 from sklearn.metrics import f1_score
+from sklearn.metrics import precision_score, recall_score
+from scipy.spatial import distance_matrix
 
 from statsmodels.distributions.empirical_distribution import ECDF
 from scipy.stats import wasserstein_distance
@@ -123,18 +126,18 @@ def goodness_of_fit(cont_dim, train, synthetic, cut_points1, cut_points2):
 #     W1 = np.mean(W1_list)
 #     return Dn, W1
 #%%
-def privacy_metrics(train, synthetic, data_percent=15):
+def DCR_metric(train, synthetic, data_percent=15):
     
     """
     Reference:
     [1] https://github.com/Team-TUD/CTAB-GAN/blob/main/model/eval/evaluation.py
     
-    Returns privacy metrics
+    Returns Distance to Closest Record
     
     Inputs:
     1) train -> real data
     2) synthetic -> corresponding synthetic data
-    3) data_percent -> percentage of data to be sampled from real and synthetic datasets for computing privacy metrics
+    3) data_percent -> percentage of data to be sampled from real and synthetic datasets for computing Distance to Closest Record
     Outputs:
     1) List containing the 5th percentile distance to closest record (DCR) between real and synthetic as well as within real and synthetic datasets
     along with 5th percentile of nearest neighbour distance ratio (NNDR) between real and synthetic as well as within real and synthetic datasets
@@ -182,4 +185,29 @@ def privacy_metrics(train, synthetic, data_percent=15):
     
     return [fifth_perc_rf,fifth_perc_rr,fifth_perc_ff]
     # return np.array([fifth_perc_rf,fifth_perc_rr,fifth_perc_ff,nn_fifth_perc_rf,nn_fifth_perc_rr,nn_fifth_perc_ff]).reshape(1,6) 
+#%%
+def attribute_disclosure(K, compromised, synthetic, attr_compromised, cut_points, cont_dim):
+    dist = distance_matrix(
+        compromised[attr_compromised].to_numpy(),
+        synthetic[attr_compromised].to_numpy(),
+        p=2)
+    K_idx = dist.argsort(axis=1)[:, :K]
+    
+    precision = 0
+    recall = 0
+    for i in tqdm.tqdm(range(len(K_idx)), desc="Marjority vote..."):
+        st1 = 0
+        true = np.zeros((len(cut_points), ))
+        vote = np.zeros((len(cut_points), ))
+        for j in range(len(cut_points)):
+            ed1 = cut_points[j]
+            xj = synthetic.to_numpy()[K_idx[i], cont_dim + st1 : cont_dim + ed1]
+            true[j] = compromised.to_numpy()[i, cont_dim + st1 : cont_dim + ed1].argmax()
+            vote[j] = xj.mean(axis=0).argmax() # majority vote
+            st1 = ed1
+        precision += precision_score(true, vote, average="macro", zero_division=0)
+        recall += recall_score(true, vote, average="macro", zero_division=0)
+    precision /= len(K_idx)
+    recall /= len(K_idx)
+    return precision, recall
 #%%
