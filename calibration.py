@@ -9,6 +9,8 @@ import tqdm
 from PIL import Image
 import matplotlib.pyplot as plt
 # plt.switch_backend('agg')
+import matplotlib as mpl
+mpl.style.use('seaborn')
 
 import torch
 from torch import nn
