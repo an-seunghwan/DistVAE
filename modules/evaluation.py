@@ -202,8 +202,8 @@ def attribute_disclosure(K, compromised, synthetic, attr_compromised, cut_points
         for j in range(len(cut_points)):
             ed1 = cut_points[j]
             xj = synthetic.to_numpy()[K_idx[i], cont_dim + st1 : cont_dim + ed1]
-            true[j] = compromised.to_numpy()[i, cont_dim + st1 : cont_dim + ed1].argmax()
             vote[j] = xj.mean(axis=0).argmax() # majority vote
+            true[j] = compromised.to_numpy()[i, cont_dim + st1 : cont_dim + ed1].argmax()
             st1 = ed1
         precision += precision_score(true, vote, average="macro", zero_division=0)
         recall += recall_score(true, vote, average="macro", zero_division=0)
