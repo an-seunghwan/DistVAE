@@ -34,7 +34,7 @@ except:
 run = wandb.init(
     project="DistVAE", 
     entity="anseunghwan",
-    tags=['DistVAE'],
+    tags=['DistVAE', 'Privacy'],
 )
 #%%
 import argparse
@@ -96,44 +96,66 @@ def main():
     TabularDataset = dataset_module.TabularDataset
     
     dataset = TabularDataset()
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    
     OutputInfo_list = dataset.OutputInfo_list
     CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
     softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
     config["CRPS_dim"] = CRPS_dim
     config["softmax_dim"] = softmax_dim
-    # len(OutputInfo_list) - CRPS_dim
-    # config["input_dim"] = dataset.x_data.shape[1]
     #%%
-    model = VAE(config, device).to(device)
+    """shadow training and test datasets"""
+    class ShadowTabularDataset(Dataset): 
+        def __init__(self, shadow_data):
+            self.x_data = shadow_data.to_numpy()
+            
+        def __len__(self): 
+            return len(self.x_data)
+
+        def __getitem__(self, idx): 
+            x = torch.FloatTensor(self.x_data[idx])
+            return x
     
-    optimizer = torch.optim.Adam(
-        model.parameters(), 
-        lr=config["lr"]
-    )
+    shadow_data = []
+    for s in range(10):
+        df = pd.read_csv(f'./privacy/{config["dataset"]}/train_{config["seed"]}_synthetic{s}.csv', index_col=0)
+        shadow_data.append(ShadowTabularDataset(df))
+    # shadow_data_test = []
+    # for s in range(10):
+    #     df = pd.read_csv(f'./privacy/{config["dataset"]}/test_{config["seed"]}_synthetic{s}.csv', index_col=0)
+    #     shadow_data_test.append(ShadowTabularDataset(df))
+    #%%
+    for k in range(len(shadow_data)):
+        print(f"Training {k}th shadow model...\n")
+        
+        model = VAE(config, device).to(device)
+        
+        optimizer = torch.optim.Adam(
+            model.parameters(), 
+            lr=config["lr"]
+        )
+        
+        model.train()
+        
+        dataloader = DataLoader(shadow_data[k], batch_size=config["batch_size"], shuffle=True)
+        
+        for epoch in range(config["epochs"]):
+            logs = train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device)
+            
+            print_input = "[epoch {:03d}]".format(epoch + 1)
+            print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
+            print(print_input)
+            
+            """update log"""
+            wandb.log({x : np.mean(y) for x, y in logs.items()})
     
-    model.train()
-    #%%
-    for epoch in range(config["epochs"]):
-        logs = train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device)
-        
-        print_input = "[epoch {:03d}]".format(epoch + 1)
-        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
-        print(print_input)
-        
-        """update log"""
-        wandb.log({x : np.mean(y) for x, y in logs.items()})
-    #%%
-    """model save"""
-    torch.save(model.state_dict(), './assets/DistVAE_{}.pth'.format(config["dataset"]))
-    artifact = wandb.Artifact('DistVAE_{}'.format(config["dataset"]), 
-                            type='model',
-                            metadata=config) # description=""
-    artifact.add_file('./assets/DistVAE_{}.pth'.format(config["dataset"]))
-    artifact.add_file('./main.py')
-    artifact.add_file('./modules/model.py')
-    wandb.log_artifact(artifact)
+        """model save"""
+        torch.save(model.state_dict(), './assets/shadow_DistVAE_{}.pth'.format(config["dataset"]))
+        artifact = wandb.Artifact('shadow_DistVAE_{}'.format(config["dataset"]), 
+                                type='model',
+                                metadata=config) # description=""
+        artifact.add_file('./assets/shadow_DistVAE_{}.pth'.format(config["dataset"]))
+        artifact.add_file('./main.py')
+        artifact.add_file('./modules/model.py')
+        wandb.log_artifact(artifact)
     #%%    
     wandb.config.update(config, allow_val_change=True)
     wandb.run.finish()
