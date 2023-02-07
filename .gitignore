@@ -15,3 +15,5 @@ overleaf*
 data
 wandb*
 *.pdf
+.vscode
+privacy
