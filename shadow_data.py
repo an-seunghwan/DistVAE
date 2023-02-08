@@ -105,7 +105,9 @@ def main():
     OutputInfo_list = dataset.OutputInfo_list
     n = len(dataset.train)
     m = len(test_dataset.test)
-    for s in tqdm.tqdm(range(10), desc="Generating shadow train and test datasets..."):
+    
+    K = 1 # the number of shadow models
+    for s in tqdm.tqdm(range(K), desc="Generating shadow train and test datasets..."):
         torch.manual_seed(s)
         # train
         with torch.no_grad():
