@@ -20,7 +20,7 @@ from modules.simulation import set_random_seed
 from modules.model import VAE
 from modules.train import train_VAE
 
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
 #%%
 import sys
 import subprocess
@@ -269,13 +269,16 @@ def main():
     gt = np.zeros((len(pred), ))
     gt[:len(gt_latents)] = 1
     
-    precision = precision_score(gt, pred)
-    recall = recall_score(gt, pred)
+    acc = (gt == pred).mean()
+    f1 = f1_score(gt, pred)
+    auc = roc_auc_score(gt, pred)
     
-    print('MI Precision: {:.3f}'.format(precision))
-    print('MI Recall: {:.3f}'.format(recall))
-    wandb.log({'MI Precision' : precision})
-    wandb.log({'MI Recall' : recall})
+    print('MI Accuracy: {:.3f}'.format(acc))
+    print('MI F1: {:.3f}'.format(f1))
+    print('MI AUC: {:.3f}'.format(auc))
+    wandb.log({'MI Accuracy' : acc})
+    wandb.log({'MI F1' : f1})
+    wandb.log({'MI AUC' : auc})
     #%%    
     wandb.run.finish()
 #%%
