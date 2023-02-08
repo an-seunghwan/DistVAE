@@ -58,9 +58,10 @@ def main():
     config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
+    K = 1 # the number of shadow models
     model_dirs = []
-    for n in tqdm.tqdm(range(10), desc="Loading trained shadow models..."):
-        num = config["num"] * 10 + n
+    for n in tqdm.tqdm(range(K), desc="Loading trained shadow models..."):
+        num = config["num"] * K + n
         artifact = wandb.use_artifact('anseunghwan/DistVAE/shadow_DistVAE_{}:v{}'.format(config["dataset"], num), type='model')
         for key, item in artifact.metadata.items():
             config[key] = item
@@ -90,6 +91,7 @@ def main():
     config["softmax_dim"] = softmax_dim
     #%%
     """Load shadow models"""
+    models = []
     for k in range(len(model_dirs)):
         model_dir = model_dirs[k]
         
@@ -106,6 +108,7 @@ def main():
                     model_dir + '/' + model_name, map_location=torch.device('cpu')))
         
         model.eval()
+        models.append(model)
     #%%
     if config["dataset"] == "covtype":
         target = 'Cover_Type'
@@ -151,13 +154,12 @@ def main():
     latents = []
     for k in range(len(model_dirs)):
         dataloader = DataLoader(shadow_data[k], batch_size=config["batch_size"], shuffle=False)
-        
         zs = []
         for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
             if config["cuda"]:
                 x_batch = x_batch.cuda()
             with torch.no_grad():
-                mean, logvar = model.get_posterior(x_batch)
+                mean, _ = models[k].get_posterior(x_batch)
             zs.append(mean)
         zs = torch.cat(zs, dim=0)
         latents.append(zs)
@@ -166,13 +168,12 @@ def main():
     latents_test = []
     for k in range(len(model_dirs)):
         dataloader = DataLoader(shadow_data_test[k], batch_size=config["batch_size"], shuffle=False)
-        
         zs = []
         for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
             if config["cuda"]:
                 x_batch = x_batch.cuda()
             with torch.no_grad():
-                mean, logvar = model.get_posterior(x_batch)
+                mean, _ = models[k].get_posterior(x_batch)
             zs.append(mean)
         zs = torch.cat(zs, dim=0)
         latents_test.append(zs)
@@ -200,11 +201,11 @@ def main():
     """training attack model"""
     from sklearn.ensemble import GradientBoostingClassifier
     attackers = {}
-    for k in range(target_num):
+    for t in range(target_num):
         clf = GradientBoostingClassifier(random_state=0).fit(
-            attack_training[k][:, :config["latent_dim"]], 
-            attack_training[k][:, -1])
-        attackers[k] = clf
+            attack_training[t][:, :config["latent_dim"]], 
+            attack_training[t][:, -1])
+        attackers[t] = clf
     #%%
     """target model"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
@@ -228,7 +229,7 @@ def main():
     
     dataset = TabularDataset()
     test_dataset = TabularDataset(train=False)
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
     test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=False)
     #%%
     """Ground-truth training latent variables"""
@@ -237,7 +238,7 @@ def main():
         if config["cuda"]:
             x_batch = x_batch.cuda()
         with torch.no_grad():
-            mean, logvar = model.get_posterior(x_batch)
+            mean, _ = model.get_posterior(x_batch)
         gt_latents.append(mean)
     gt_latents = torch.cat(gt_latents, dim=0)
     #%%
@@ -247,7 +248,7 @@ def main():
         if config["cuda"]:
             x_batch = x_batch.cuda()
         with torch.no_grad():
-            mean, logvar = model.get_posterior(x_batch)
+            mean, _ = model.get_posterior(x_batch)
         gt_latents_test.append(mean)
     gt_latents_test = torch.cat(gt_latents_test, dim=0)
     #%%
@@ -271,8 +272,8 @@ def main():
     precision = precision_score(gt, pred)
     recall = recall_score(gt, pred)
     
-    print('MI Precision:', precision)
-    print('MI Recall:', recall)
+    print('MI Precision: {:.3f}'.format(precision))
+    print('MI Recall: {:.3f}'.format(recall))
     wandb.log({'MI Precision' : precision})
     wandb.log({'MI Recall' : recall})
     #%%    
