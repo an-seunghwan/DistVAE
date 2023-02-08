@@ -14,8 +14,7 @@ from sklearn.ensemble import (
     GradientBoostingClassifier
 )
 
-from sklearn.metrics import f1_score
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import f1_score, precision_score, recall_score
 from scipy.spatial import distance_matrix
 
 from statsmodels.distributions.empirical_distribution import ECDF
@@ -193,8 +192,8 @@ def attribute_disclosure(K, compromised, synthetic, attr_compromised, cut_points
         p=2)
     K_idx = dist.argsort(axis=1)[:, :K]
     
-    precision = 0
-    recall = 0
+    votes = []
+    trues = []
     for i in tqdm.tqdm(range(len(K_idx)), desc="Marjority vote..."):
         st1 = 0
         true = np.zeros((len(cut_points), ))
@@ -205,9 +204,18 @@ def attribute_disclosure(K, compromised, synthetic, attr_compromised, cut_points
             vote[j] = xj.mean(axis=0).argmax() # majority vote
             true[j] = compromised.to_numpy()[i, cont_dim + st1 : cont_dim + ed1].argmax()
             st1 = ed1
-        precision += precision_score(true, vote, average="macro", zero_division=0)
-        recall += recall_score(true, vote, average="macro", zero_division=0)
-    precision /= len(K_idx)
-    recall /= len(K_idx)
-    return precision, recall
+        votes.append(vote)
+        trues.append(true)
+    votes = np.vstack(votes)
+    trues = np.vstack(trues)
+    
+    acc = 0
+    f1 = 0
+    for j in range(trues.shape[1]):
+        acc += (trues[:, j] == votes[:, j]).mean()
+        f1 += f1_score(trues[:, j], votes[:, j], average="macro", zero_division=0)
+    acc /= trues.shape[1]
+    f1 /= trues.shape[1]
+
+    return acc, f1
 #%%
