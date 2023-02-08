@@ -114,8 +114,9 @@ def main():
             x = torch.FloatTensor(self.x_data[idx])
             return x
     
+    K = 1 # the number of shadow models
     shadow_data = []
-    for s in range(10):
+    for s in range(K):
         df = pd.read_csv(f'./privacy/{config["dataset"]}/train_{config["seed"]}_synthetic{s}.csv', index_col=0)
         shadow_data.append(ShadowTabularDataset(df))
     # shadow_data_test = []
