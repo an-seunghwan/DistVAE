@@ -9,8 +9,8 @@ import tqdm
 from PIL import Image
 import matplotlib.pyplot as plt
 # plt.switch_backend('agg')
-import matplotlib as mpl
-mpl.style.use('seaborn')
+# import matplotlib as mpl
+# mpl.style.use('seaborn')
 
 import torch
 from torch import nn
@@ -197,14 +197,15 @@ def main():
     
     ax.step(x_linspace, emp, label="empirical",
             linewidth=3.5, color=u'#ff7f0e')
-    ax.step(x_linspace, alpha_mono, label="calibration",
-            linewidth=3.5, linestyle='--', color=u'#1f77b4')
     ax.plot(x_linspace_est, alpha_est, label="estimate",
             linewidth=3.5, color=u'#2ca02c')
+    ax.step(x_linspace, alpha_mono, label="calibration",
+            linewidth=3.5, linestyle='--', color=u'#1f77b4')
     ax.set_xlabel(dataset.continuous[j], fontsize=14)
     # ax.set_ylabel('alpha', fontsize=14)
     ax.tick_params(axis='x', labelsize=14)
     ax.tick_params(axis='y', labelsize=14)
+    plt.grid(True, axis='y', linestyle='--')
     
     plt.legend(fontsize=14)
     plt.tight_layout()
