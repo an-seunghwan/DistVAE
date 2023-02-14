@@ -127,6 +127,9 @@ def main():
     #%%
     """model save"""
     torch.save(model.state_dict(), './assets/DistVAE_{}.pth'.format(config["dataset"]))
+    # artifact = wandb.Artifact('beta{}_DistVAE_{}'.format(config["beta"], config["dataset"]), 
+    #                         type='model',
+    #                         metadata=config) # description=""
     artifact = wandb.Artifact('DistVAE_{}'.format(config["dataset"]), 
                             type='model',
                             metadata=config) # description=""

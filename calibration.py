@@ -59,7 +59,10 @@ def main():
     config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta0.5_DistVAE_{}:v{}'.format(
+    #     config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+        config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     model_dir = artifact.download()

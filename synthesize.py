@@ -52,6 +52,8 @@ def get_args(debug):
                         help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
+    # parser.add_argument('--beta', default=0.5, type=float,
+    #                     help='observation noise')
 
     if debug:
         return parser.parse_args(args=[])
@@ -63,7 +65,10 @@ def main():
     config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{}_DistVAE_{}:v{}'.format(
+    #     config["beta"], config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+        config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     model_dir = artifact.download()
@@ -202,7 +207,6 @@ def main():
             wandb.log({f'AD Accuracy (S={attr_num},K={K})': acc})
             wandb.log({f'AD F1 (S={attr_num},K={K})': f1})
     #%%
-        #%%
     """Regression"""
     if config["dataset"] == "covtype":
         target = 'Elevation'
