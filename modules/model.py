@@ -98,7 +98,7 @@ class VAE(nn.Module):
         G = (- (U + eps).log() + eps).log()
         return G
     
-    def generate_data(self, n, OutputInfo_list, dataset):
+    def generate_data(self, n, OutputInfo_list, dataset, reverse_col=False):
         data = []
         steps = n // self.config["batch_size"] + 1
         
@@ -127,7 +127,7 @@ class VAE(nn.Module):
                         st = ed
             
                 samples = torch.cat(samples, dim=1)
-            data.append(samples)
+                data.append(samples)
         data = torch.cat(data, dim=0)
         data = data[:n, :]
         data = pd.DataFrame(data.numpy(), columns=dataset.continuous + dataset.discrete)
@@ -137,6 +137,12 @@ class VAE(nn.Module):
         
         """post-process integer columns (calibration)"""
         data[dataset.integer] = data[dataset.integer].round(0).astype(int)
+        data[dataset.discrete] = data[dataset.discrete].astype(int)
+        
+        if reverse_col:
+            """reverse to original column names"""
+            for dis, disdict in zip(dataset.discrete, dataset.discrete_dicts_reverse):
+                data[dis] = data[dis].apply(lambda x:disdict.get(x))
         
         return data
     
