@@ -42,7 +42,7 @@ class TabularDataset(Dataset):
             'Surge_Pricing_Type', # target variable
         ]
         self.integer = [
-            'Var1'
+            'Var1',
             'Var2',
             'Var3']
         base = base[self.continuous + self.discrete]
