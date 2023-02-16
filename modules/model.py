@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
+import pandas as pd
 #%%
 class VAE(nn.Module):
     def __init__(self, config, device):
@@ -97,8 +98,8 @@ class VAE(nn.Module):
         G = (- (U + eps).log() + eps).log()
         return G
     
-    def generate_data(self, n, OutputInfo_list):
-        samples = []
+    def generate_data(self, n, OutputInfo_list, dataset):
+        data = []
         steps = n // self.config["batch_size"] + 1
         
         with torch.no_grad():
@@ -106,6 +107,7 @@ class VAE(nn.Module):
                 randn = torch.randn(self.config["batch_size"], self.config["latent_dim"]) # prior
                 gamma, beta, logit = self.quantile_parameter(randn)
                 
+                samples = []
                 st = 0
                 for j, info in enumerate(OutputInfo_list):
                     if info.activation_fn == "CRPS":
@@ -124,9 +126,19 @@ class VAE(nn.Module):
                         # samples.append(F.one_hot(out, num_classes=info.dim))
                         st = ed
             
-        samples = torch.cat(samples, dim=1)
-        samples = samples[:n, :]
-        return samples
+                samples = torch.cat(samples, dim=1)
+            data.append(samples)
+        data = torch.cat(data, dim=0)
+        data = data[:n, :]
+        data = pd.DataFrame(data.numpy(), columns=dataset.continuous + dataset.discrete)
+        
+        """un-standardization of synthetic data"""
+        data[dataset.continuous] = data[dataset.continuous] * dataset.std + dataset.mean
+        
+        """post-process integer columns (calibration)"""
+        data[dataset.integer] = data[dataset.integer].round(0).astype(int)
+        
+        return data
     
     # def generate_data(self, n, OutputInfo_list):
     #     randn = torch.randn(n, self.config["latent_dim"]) # prior
