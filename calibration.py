@@ -59,10 +59,10 @@ def main():
     config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
-    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta0.5_DistVAE_{}:v{}'.format(
-    #     config["dataset"], config["num"]), type='model')
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta0.5_DistVAE_{}:v{}'.format(
         config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+    #     config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     model_dir = artifact.download()
@@ -85,8 +85,6 @@ def main():
     
     dataset = TabularDataset()
     test_dataset = TabularDataset(train=False)
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     
     OutputInfo_list = dataset.OutputInfo_list
     CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
@@ -109,31 +107,13 @@ def main():
     model.eval()
     #%%
     """real data: covtype dataset"""
-    base = pd.read_csv('./data/adult.csv')
-    base = base.sample(frac=1, random_state=0).reset_index(drop=True)
-    base = base[(base == '?').sum(axis=1) == 0]
-    
-    continuous = [
-        'age',
-        'educational-num',
-        'capital-gain', 
-        'capital-loss', 
-        'hours-per-week',
-    ]
-    base = base[continuous]
-    base = base.dropna()
-    
-    df = base.iloc[:40000]
+    df = dataset.train_raw[dataset.continuous]
     #%%
     MC = 5000
     j = 1 # educational-num
     
     """Quantile Estimation with sampling mechanism"""
     n = 100
-    # x_linspace_est = np.linspace(
-    #     np.quantile(dataset.x_data[:, j], q=0.01),
-    #     np.quantile(dataset.x_data[:, j], q=0.99),
-    #     n)
     x_linspace_est = np.linspace(
         np.min(dataset.x_data[:, j]),
         np.max(dataset.x_data[:, j]),
@@ -152,9 +132,6 @@ def main():
     x_linspace_est = x_linspace_est * dataset.std[j] + dataset.mean[j]
     #%%
     """Calibration Step 1. Estimate F(x + 0.5), F(x - 0.5)"""
-    # x_linspace = [np.arange(x, y+2, 1) - 0.5 for x, y in zip(
-    #     [np.quantile(df.to_numpy()[:, j], q=0.01)],
-    #     [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     x_linspace = [np.arange(x, y+2, 1) - 0.5 for x, y in zip(
         [np.min(df.to_numpy()[:, j])],
         [np.max(df.to_numpy()[:, j])])][0]
@@ -171,9 +148,6 @@ def main():
             alpha_hat += alpha_tilde
     alpha_hat /= MC
     
-    # x_linspace = [np.arange(x, y+1, 1) for x, y in zip(
-    #     [np.quantile(df.to_numpy()[:, j], q=0.01)],
-    #     [np.quantile(df.to_numpy()[:, j], q=0.99)])][0]
     x_linspace = [np.arange(x, y+1, 1) for x, y in zip(
         [np.min(df.to_numpy()[:, j])],
         [np.max(df.to_numpy()[:, j])])][0]

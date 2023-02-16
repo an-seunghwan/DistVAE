@@ -47,8 +47,8 @@ def get_args(debug):
                         help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    # parser.add_argument('--beta', default=0.5, type=float,
-    #                     help='observation noise')
+    parser.add_argument('--beta', default=0.5, type=float,
+                        help='observation noise')
 
     if debug:
         return parser.parse_args(args=[])
@@ -60,10 +60,10 @@ def main():
     config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
-    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{}_DistVAE_{}:v{}'.format(
-    #     config["beta"], config["dataset"], config["num"]), type='model')
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
-        config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{}_DistVAE_{}:v{}'.format(
+        config["beta"], config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+    #     config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     model_dir = artifact.download()
@@ -114,10 +114,6 @@ def main():
         [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
         [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
         n)
-    # x_linspace = np.linspace(
-    #     [np.min(dataset.x_data[:, k]) for k in range(len(dataset.continuous))],
-    #     [np.max(dataset.x_data[:, k]) for k in range(len(dataset.continuous))],
-    #     n)
     x_linspace = torch.from_numpy(x_linspace)
     
     alpha_hat = torch.zeros((n, len(dataset.continuous)))
@@ -165,50 +161,21 @@ def main():
     if config["dataset"] == "covtype":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
-        integer = dataset.continuous
-        
     elif config["dataset"] == "credit":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2, 
                                figsize=(3 * config["CRPS_dim"] // 2, 3 * 2))
-        integer = [
-            'DAYS_BIRTH', 
-            'DAYS_EMPLOYED', 
-            'DAYS_ID_PUBLISH']
-        
     elif config["dataset"] == "loan":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
-        integer = [
-            'Age',
-            'Experience',
-            'Income', 
-            'Mortgage']
-        
     elif config["dataset"] == "adult":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
-        integer = dataset.continuous
-        
     elif config["dataset"] == "cabs":
         fig, ax = plt.subplots(1, config["CRPS_dim"], 
                                figsize=(3 * config["CRPS_dim"], 3 * 1))
-        integer = [
-            'Var2',
-            'Var3']
-        
     elif config["dataset"] == "kings":
         fig, ax = plt.subplots(2, config["CRPS_dim"] // 2 + 1, 
                                figsize=(3 * config["CRPS_dim"] // 2 + 1, 3 * 2))
-        integer = [
-            'sqft_living',
-            'sqft_lot',
-            'sqft_above',
-            'sqft_basement',
-            'yr_built',
-            'yr_renovated',
-            'sqft_living15',
-            'sqft_lot15',]
-        
     else:
         raise ValueError('Not supported dataset!')
     
@@ -220,10 +187,7 @@ def main():
         x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
             [np.quantile(orig.to_numpy()[:, k], q=0.01)],
             [np.quantile(orig.to_numpy()[:, k], q=0.99)])][0]
-        # x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
-        #     [np.min(orig.to_numpy()[:, k])],
-        #     [np.max(orig.to_numpy()[:, k])])][0]
-        if v in integer:
+        if v in dataset.integer:
             ecdf = ECDF(orig[dataset.continuous].to_numpy()[:, k])
             emp = [ecdf(x) for x in x_linspace_orig]
             ax.flatten()[k].step((x_linspace_orig - dataset.mean[k]) / dataset.std[k], 
