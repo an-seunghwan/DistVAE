@@ -48,8 +48,10 @@ class TabularDataset(Dataset):
         # [len(base[d].value_counts()) for d in self.discrete]
         
         self.discrete_dicts = []
+        self.discrete_dicts_reverse = []
         for dis in self.discrete:
-            discrete_dict = {x:i for i,x in enumerate(base[dis].unique())}
+            discrete_dict = {x:i for i,x in enumerate(sorted(base[dis].unique()))}
+            self.discrete_dicts_reverse.append({i:x for i,x in enumerate(sorted(base[dis].unique()))})
             base[dis] = base[dis].apply(lambda x: discrete_dict.get(x))
             self.discrete_dicts.append(discrete_dict)
         
