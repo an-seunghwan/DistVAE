@@ -56,6 +56,14 @@ class TabularDataset(Dataset):
         base = base.dropna()
         base = base.iloc[:50000]
         
+        self.discrete_dicts = []
+        self.discrete_dicts_reverse = []
+        for dis in self.discrete:
+            discrete_dict = {x:i for i,x in enumerate(sorted(base[dis].unique()))}
+            self.discrete_dicts_reverse.append({i:x for i,x in enumerate(sorted(base[dis].unique()))})
+            base[dis] = base[dis].apply(lambda x: discrete_dict.get(x))
+            self.discrete_dicts.append(discrete_dict)
+        
         self.RegTarget = 'AMT_CREDIT'
         self.ClfTarget = 'TARGET'
         

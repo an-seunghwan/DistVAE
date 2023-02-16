@@ -58,6 +58,14 @@ class TabularDataset(Dataset):
         base = base[self.continuous + self.discrete]
         # [len(base[d].value_counts()) for d in discrete]
         
+        self.discrete_dicts = []
+        self.discrete_dicts_reverse = []
+        for dis in self.discrete:
+            discrete_dict = {x:i for i,x in enumerate(sorted(base[dis].unique()))}
+            self.discrete_dicts_reverse.append({i:x for i,x in enumerate(sorted(base[dis].unique()))})
+            base[dis] = base[dis].apply(lambda x: discrete_dict.get(x))
+            self.discrete_dicts.append(discrete_dict)
+        
         self.RegTarget = 'long'
         self.ClfTarget = 'condition'
         
