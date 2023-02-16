@@ -71,8 +71,6 @@ class VAE(nn.Module):
                             delta_ - self.delta,
                             torch.zeros(()).to(self.device))
         mask = gamma[j] + (beta[j] * delta_.unsqueeze(2)).sum(axis=-1).squeeze(0).t()
-        # mask = [self.quantile_function(d, gamma, beta, j) for d in self.delta[0]]
-        # mask = torch.cat(mask, axis=1)
         mask = torch.where(mask <= x, 
                         mask, 
                         torch.zeros(()).to(self.device)).type(torch.bool).type(torch.float)
@@ -100,32 +98,63 @@ class VAE(nn.Module):
         return G
     
     def generate_data(self, n, OutputInfo_list):
-        randn = torch.randn(n, self.config["latent_dim"]) # prior
-        gamma, beta, logit = self.quantile_parameter(randn)
-        
         samples = []
-        st = 0
-        for j, info in enumerate(OutputInfo_list):
-            if info.activation_fn == "CRPS":
-                alpha = torch.rand(n, 1)
-                samples.append(self.quantile_function(alpha, gamma, beta, j))
+        steps = n // self.config["batch_size"] + 1
+        
+        with torch.no_grad():
+            for _ in range(steps):
+                randn = torch.randn(self.config["batch_size"], self.config["latent_dim"]) # prior
+                gamma, beta, logit = self.quantile_parameter(randn)
                 
-            elif info.activation_fn == "softmax":
-                ed = st + info.dim
-                out = logit[:, st : ed]
-                
-                """Gumbel-Max Trick"""
-                G = self.gumbel_sampling(out.shape)
-                _, out = (nn.LogSoftmax(dim=1)(out) + G).max(dim=1)
-                
-                # """ArgMax Sampling"""
-                # _, out = out.max(dim=1)
-                
-                samples.append(F.one_hot(out, num_classes=info.dim))
-                st = ed
+                st = 0
+                for j, info in enumerate(OutputInfo_list):
+                    if info.activation_fn == "CRPS":
+                        alpha = torch.rand(self.config["batch_size"], 1)
+                        samples.append(self.quantile_function(alpha, gamma, beta, j))
+                        
+                    elif info.activation_fn == "softmax":
+                        ed = st + info.dim
+                        out = logit[:, st : ed]
+                        
+                        """Gumbel-Max Trick"""
+                        G = self.gumbel_sampling(out.shape)
+                        _, out = (nn.LogSoftmax(dim=1)(out) + G).max(dim=1)
+                        
+                        samples.append(out.unsqueeze(1))
+                        # samples.append(F.one_hot(out, num_classes=info.dim))
+                        st = ed
             
         samples = torch.cat(samples, dim=1)
+        samples = samples[:n, :]
         return samples
+    
+    # def generate_data(self, n, OutputInfo_list):
+    #     randn = torch.randn(n, self.config["latent_dim"]) # prior
+    #     gamma, beta, logit = self.quantile_parameter(randn)
+        
+    #     samples = []
+    #     st = 0
+    #     for j, info in enumerate(OutputInfo_list):
+    #         if info.activation_fn == "CRPS":
+    #             alpha = torch.rand(n, 1)
+    #             samples.append(self.quantile_function(alpha, gamma, beta, j))
+                
+    #         elif info.activation_fn == "softmax":
+    #             ed = st + info.dim
+    #             out = logit[:, st : ed]
+                
+    #             """Gumbel-Max Trick"""
+    #             G = self.gumbel_sampling(out.shape)
+    #             _, out = (nn.LogSoftmax(dim=1)(out) + G).max(dim=1)
+                
+    #             # """ArgMax Sampling"""
+    #             # _, out = out.max(dim=1)
+                
+    #             samples.append(F.one_hot(out, num_classes=info.dim))
+    #             st = ed
+            
+    #     samples = torch.cat(samples, dim=1)
+    #     return samples
 #%%
 def main():
     #%%
