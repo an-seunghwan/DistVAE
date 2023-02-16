@@ -19,10 +19,9 @@ from torch.utils.data import Dataset
 from modules.simulation import set_random_seed
 from modules.model import VAE
 from modules.evaluation import (
-    merge_discrete,
     regression_eval,
     classification_eval,
-    goodness_of_fit,
+    statistical_similarity,
     DCR_metric,
     attribute_disclosure
 )
@@ -52,8 +51,8 @@ def get_args(debug):
                         help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    # parser.add_argument('--beta', default=0.5, type=float,
-    #                     help='observation noise')
+    parser.add_argument('--beta', default=0.1, type=float,
+                        help='observation noise')
 
     if debug:
         return parser.parse_args(args=[])
@@ -65,10 +64,10 @@ def main():
     config = vars(get_args(debug=False)) # default configuration
     
     """model load"""
-    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{}_DistVAE_{}:v{}'.format(
-    #     config["beta"], config["dataset"], config["num"]), type='model')
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
-        config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
+        config["beta"], config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+    #     config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     model_dir = artifact.download()
@@ -91,8 +90,6 @@ def main():
     
     dataset = TabularDataset()
     test_dataset = TabularDataset(train=False)
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     
     OutputInfo_list = dataset.OutputInfo_list
     CRPS_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'CRPS'])
@@ -120,188 +117,92 @@ def main():
     print("Number of Parameters:", num_params)
     wandb.log({'Number of Parameters': num_params})
     #%%
-    """Inverse Transform Sampling"""
-    OutputInfo_list = dataset.OutputInfo_list
+    """Synthetic Data Generation"""
     n = len(dataset.train)
-    with torch.no_grad():
-        samples = model.generate_data(n, OutputInfo_list)
-    ITS = pd.DataFrame(samples.numpy(), columns=dataset.train.columns)
-    
-    # un-standardization of synthetic data
-    ITS[dataset.continuous] = ITS[dataset.continuous] * dataset.std + dataset.mean
+    syndata = model.generate_data(n, OutputInfo_list, dataset)
     #%%
-    # standardization of synthetic data
-    ITS_mean = ITS[dataset.continuous].mean(axis=0)
-    ITS_std = ITS[dataset.continuous].std(axis=0)
-    ITS_scaled = ITS.copy()
-    ITS_scaled[dataset.continuous] = (ITS[dataset.continuous] - ITS_mean) / ITS_std
-    #%%
-    """Goodness of Fit""" 
-    print("\nGoodness of Fit...\n")
-    
-    cut_points = merge_discrete(dataset.train.to_numpy(), config["CRPS_dim"])
-    ITS_cut_points = merge_discrete(ITS_scaled.to_numpy(), config["CRPS_dim"])
-    
-    Dn, W1 = goodness_of_fit(config["CRPS_dim"], dataset.train.to_numpy(), ITS_scaled.to_numpy(), cut_points, ITS_cut_points)
+    print("\nStatistical Similarity...\n")
+    Dn, W1 = statistical_similarity(
+        dataset.train_raw.copy(), syndata.copy(), 
+        standardize=True, continuous=dataset.continuous)
     cont_Dn = np.mean(Dn[:config["CRPS_dim"]])
     disc_Dn = np.mean(Dn[config["CRPS_dim"]:])
     cont_W1 = np.mean(W1[:config["CRPS_dim"]])
     disc_W1 = np.mean(W1[config["CRPS_dim"]:])
     
     print('K-S (continuous): {:.3f}'.format(cont_Dn))
-    print('K-S (discrete): {:.3f}'.format(disc_Dn))
     print('1-WD (continuous): {:.3f}'.format(cont_W1))
+    print('K-S (discrete): {:.3f}'.format(disc_Dn))
     print('1-WD (discrete): {:.3f}'.format(disc_W1))
     wandb.log({'K-S (continuous)': cont_Dn})
-    wandb.log({'K-S (discrete)': disc_Dn})
     wandb.log({'1-WD (continuous)': cont_W1})
+    wandb.log({'K-S (discrete)': disc_Dn})
     wandb.log({'1-WD (discrete)': disc_W1})
-    
-    # Dn, W1 = goodness_of_fit(config, dataset.train.to_numpy(), ITS_scaled.to_numpy())
-    
-    # print('Goodness of Fit (Kolmogorov): {:.3f}'.format(Dn))
-    # print('Goodness of Fit (1-Wasserstein): {:.3f}'.format(W1))
-    # wandb.log({'Goodness of Fit (Kolmogorov)': Dn})
-    # wandb.log({'Goodness of Fit (1-Wasserstein)': W1})
     #%%
-    """Privacy Preservability""" # only continuous
     print("\nDistance to Closest Record...\n")
+    # standardization of synthetic data
+    syndata_ = syndata.copy()
+    syndata_[dataset.continuous] -= syndata_[dataset.continuous].mean(axis=0)
+    syndata_[dataset.continuous] /= syndata_[dataset.continuous].std(axis=0)
     
-    privacy = DCR_metric(dataset.train[dataset.continuous], ITS_scaled[dataset.continuous])
+    privacy = DCR_metric(
+        dataset.train[dataset.continuous].copy(), syndata_[dataset.continuous].copy())
     
     DCR = privacy
-    # DCR = privacy[0, :3]
     print('DCR (R&S): {:.3f}'.format(DCR[0]))
     print('DCR (R): {:.3f}'.format(DCR[1]))
     print('DCR (S): {:.3f}'.format(DCR[2]))
     wandb.log({'DCR (R&S)': DCR[0]})
     wandb.log({'DCR (R)': DCR[1]})
     wandb.log({'DCR (S)': DCR[2]})
-    
-    # NNDR = privacy[0, 3:]
-    # print('NNDR (R&S): {:.3f}'.format(NNDR[0]))
-    # print('NNDR (R): {:.3f}'.format(NNDR[1]))
-    # print('NNDR (S): {:.3f}'.format(NNDR[2]))
-    # wandb.log({'NNDR (R&S)': NNDR[0]})
-    # wandb.log({'NNDR (R)': NNDR[1]})
-    # wandb.log({'NNDR (S)': NNDR[2]})
     #%%
     print("\nAttribute Disclosure...\n")
+    compromised_idx = np.random.choice(
+        range(len(dataset.train_raw)), 
+        int(len(dataset.train_raw) * 0.01), 
+        replace=False)
+    train_raw_ = dataset.train_raw.copy()
+    train_raw_[dataset.continuous] -= train_raw_[dataset.continuous].mean(axis=0)
+    train_raw_[dataset.continuous] /= train_raw_[dataset.continuous].std(axis=0)
+    compromised = train_raw_.iloc[compromised_idx].reset_index().drop(columns=['index'])
     
-    cut_points = merge_discrete(ITS_scaled.to_numpy(), config["CRPS_dim"])
-    
-    compromised_idx = np.random.choice(range(len(dataset.train)), 
-                                       int(len(dataset.train) * 0.01), 
-                                       replace=False)
-    compromised = dataset.train.iloc[compromised_idx]
+    # for attr_num in [1, 2, 3, 4, 5]:
+    #     if attr_num > len(dataset.continuous): break
+    attr_num = 5
+    attr_compromised = dataset.continuous[:attr_num]
+    for K in [1, 10, 100]:
+        acc, f1 = attribute_disclosure(
+            K, compromised, syndata_, attr_compromised, dataset)
+        print(f'AD F1 (S={attr_num},K={K}): {f1:.3f}')
+        wandb.log({f'AD F1 (S={attr_num},K={K})': f1})
+        # print(f'AD Accuracy (S={attr_num},K={K}): {acc:.3f}')
+        # wandb.log({f'AD Accuracy (S={attr_num},K={K})': acc})
     #%%
-    for attr_num in [1, 2, 3, 4, 5]:
-        if attr_num > len(dataset.continuous): break
-        attr_compromised = dataset.continuous[:attr_num]
-        for K in [1, 10, 100]:
-            acc, f1 = attribute_disclosure(
-                K, compromised, ITS_scaled, attr_compromised, cut_points, config["CRPS_dim"]
-            )
-            print(f'AD Accuracy (S={attr_num},K={K}):', acc)
-            print(f'AD F1 (S={attr_num},K={K}):', f1)
-            wandb.log({f'AD Accuracy (S={attr_num},K={K})': acc})
-            wandb.log({f'AD F1 (S={attr_num},K={K})': f1})
-    #%%
-    """Regression"""
-    if config["dataset"] == "covtype":
-        target = 'Elevation'
-    elif config["dataset"] == "credit":
-        target = 'AMT_CREDIT'
-    elif config["dataset"] == "loan":
-        target = 'Age'
-    elif config["dataset"] == "adult":
-        target = 'age'
-    elif config["dataset"] == "cabs":
-        target = 'Trip_Distance'
-    elif config["dataset"] == "kings":
-        target = 'long'
-    else:
-        raise ValueError('Not supported dataset!')
-    #%%
-    # standardization except for target variable
-    real_train = dataset.train.copy()
-    real_test = test_dataset.test.copy()
-    real_train[target] = real_train[target] * dataset.std[target] + dataset.mean[target]
-    real_test[target] = real_test[target] * dataset.std[target] + dataset.mean[target]
-    
-    cont = [x for x in dataset.continuous if x not in [target]]
-    ITS_scaled = ITS.copy()
-    ITS_scaled[cont] = (ITS_scaled[cont] - ITS_mean[cont]) / ITS_std[cont]
-    #%%
-    # baseline
     print("\nBaseline: Machine Learning Utility in Regression...\n")
-    base_reg = regression_eval(real_train, real_test, target)
+    base_reg = regression_eval(
+        dataset.train.copy(), test_dataset.test.copy(), dataset.RegTarget, 
+        dataset.mean[dataset.RegTarget], dataset.std[dataset.RegTarget])
     wandb.log({'MARE (Baseline)': np.mean([x[1] for x in base_reg])})
-    # wandb.log({'R^2 (Baseline)': np.mean([x[1] for x in base_reg])})
     #%%
-    # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Regression...\n")
-    reg = regression_eval(ITS_scaled, real_test, target)
+    df_dummy = []
+    for d in dataset.discrete:
+        df_dummy.append(pd.get_dummies(syndata_[d], prefix=d))
+    syndata_ = pd.concat([syndata_.drop(columns=dataset.discrete)] + df_dummy, axis=1)
+    reg = regression_eval(
+        syndata_.copy(), test_dataset.test.copy(), dataset.RegTarget, 
+        syndata.mean()[dataset.RegTarget], syndata.std()[dataset.RegTarget])
     wandb.log({'MARE': np.mean([x[1] for x in reg])})
-    # wandb.log({'R^2': np.mean([x[1] for x in reg])})
     #%%
-    # # visualization
-    # fig = plt.figure(figsize=(5, 4))
-    # plt.plot([x[1] for x in base_reg], 'o--', label='baseline')
-    # plt.plot([x[1] for x in reg], 'o--', label='synthetic')
-    # plt.ylim(0, 1)
-    # plt.ylabel('MARE', fontsize=13)
-    # # plt.ylabel('$R^2$', fontsize=13)
-    # plt.xticks([0, 1, 2], [x[0] for x in base_reg], fontsize=13)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/{}_MLU_regression.png'.format(config["dataset"], config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'ML Utility (Regression)': wandb.Image(fig)})
-    #%%
-    """Classification"""
-    if config["dataset"] == "covtype":
-        target = 'Cover_Type'
-    elif config["dataset"] == "credit":
-        target = 'TARGET'
-    elif config["dataset"] == "loan":
-        target = 'Personal Loan'
-    elif config["dataset"] == "adult":
-        target = 'income'
-    elif config["dataset"] == "cabs":
-        target = 'Surge_Pricing_Type'
-    elif config["dataset"] == "kings":
-        target = 'condition'
-    else:
-        raise ValueError('Not supported dataset!')
-    #%%
-    # baseline
     print("\nBaseline: Machine Learning Utility in Classification...\n")
-    base_clf = classification_eval(dataset.train, test_dataset.test, target)
+    base_clf = classification_eval(
+        dataset.train.copy(), test_dataset.test.copy(), dataset.ClfTarget)
     wandb.log({'F1 (Baseline)': np.mean([x[1] for x in base_clf])})
     #%%
-    ITS_scaled = ITS.copy()
-    ITS_scaled[dataset.continuous] = (ITS_scaled[dataset.continuous] - ITS_mean[dataset.continuous]) / ITS_std[dataset.continuous]
-    
-    # Inverse Transform Sampling
     print("\nSynthetic: Machine Learning Utility in Classification...\n")
-    clf = classification_eval(ITS_scaled, test_dataset.test, target)
+    clf = classification_eval(
+        syndata_.copy(), test_dataset.test.copy(), dataset.ClfTarget)
     wandb.log({'F1': np.mean([x[1] for x in clf])})
-    #%%
-    # # visualization
-    # fig = plt.figure(figsize=(5, 4))
-    # plt.plot([x[1] for x in base_clf], 'o--', label='baseline')
-    # plt.plot([x[1] for x in clf], 'o--', label='synthetic')
-    # plt.ylim(0, 1)
-    # plt.ylabel('$F_1$', fontsize=13)
-    # plt.xticks([0, 1, 2], [x[0] for x in base_clf], fontsize=13)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('./assets/{}/{}_MLU_classification.png'.format(config["dataset"], config["dataset"]))
-    # # plt.show()
-    # plt.close()
-    # wandb.log({'ML Utility (Classification)': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%

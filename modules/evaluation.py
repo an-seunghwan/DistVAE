@@ -1,5 +1,6 @@
 #%%
 import numpy as np
+import pandas as pd
 import tqdm
 #%%
 import statsmodels.api as sm
@@ -22,15 +23,10 @@ from scipy.stats import wasserstein_distance
 
 from sklearn import metrics
 #%%
-def merge_discrete(data, cont_dim):
-    data = data[:, cont_dim:]
-    cut_points = [0]
-    for j in range(1, data.shape[1] + 1):
-        if np.sum(data[:, cut_points[-1]:j]) == len(data):
-            cut_points.append(j)
-    return cut_points[1:]
-#%%
-def regression_eval(train, test, target):
+def regression_eval(train, test, target, mean, std):
+    train[target] = train[target] * std + mean
+    test[target] = test[target] * std + mean
+    
     covariates = [x for x in train.columns if x not in [target]]
     
     result = []
@@ -75,10 +71,19 @@ def classification_eval(train, test, target):
         print("[{}] F1: {:.3f}".format(name, f1))
     return result
 #%%
-def goodness_of_fit(cont_dim, train, synthetic, cut_points1, cut_points2):
+def statistical_similarity(train, synthetic, standardize, continuous=None):
+    if standardize:
+        train[continuous] -= train[continuous].mean(axis=0)
+        train[continuous] /= train[continuous].std(axis=0)
+        train = train.to_numpy()
+        
+        synthetic[continuous] -= synthetic[continuous].mean(axis=0)
+        synthetic[continuous] /= synthetic[continuous].std(axis=0)
+        synthetic = synthetic.to_numpy()
+    
     Dn_list = []
     W1_list = []
-    for j in range(cont_dim):
+    for j in range(train.shape[1]):
         xj = train[:, j]
         ecdf = ECDF(xj)
         ecdf_hat = ECDF(synthetic[:, j])
@@ -88,42 +93,7 @@ def goodness_of_fit(cont_dim, train, synthetic, cut_points1, cut_points2):
         
         Dn_list.append(Dn)
         W1_list.append(W1)
-    
-    st1 = 0
-    st2 = 0
-    for j in range(len(cut_points1)):
-        ed1 = cut_points1[j]
-        ed2 = cut_points2[j]
-        xj = train[:, cont_dim + st1 : cont_dim + ed1]
-        ITS_xj = synthetic[:, cont_dim + st2 : cont_dim + ed2]
-        ecdf = ECDF(xj.argmax(axis=1))
-        ecdf_hat = ECDF(ITS_xj.argmax(axis=1))
-        
-        Dn = np.abs(ecdf(xj.argmax(axis=1)) - ecdf_hat(xj.argmax(axis=1))).max()
-        W1 = wasserstein_distance(xj.argmax(axis=1), ITS_xj.argmax(axis=1))
-        st1 = ed1
-        st2 = ed2
-        
-        Dn_list.append(Dn)
-        W1_list.append(W1)
     return Dn_list, W1_list
-#%%
-# def goodness_of_fit(config, train, synthetic):
-#     Dn_list = []
-#     W1_list = []
-#     for j in range(config["CRPS_dim"]):
-#         xj = train[:, j]
-#         ecdf = ECDF(xj)
-#         ecdf_hat = ECDF(synthetic[:, j])
-
-#         Dn = np.abs(ecdf(xj) - ecdf_hat(xj)).max()
-#         W1 = wasserstein_distance(xj, synthetic[:, j])
-        
-#         Dn_list.append(Dn)
-#         W1_list.append(W1)
-#     Dn = np.mean(Dn_list)
-#     W1 = np.mean(W1_list)
-#     return Dn, W1
 #%%
 def DCR_metric(train, synthetic, data_percent=15):
     
@@ -185,25 +155,24 @@ def DCR_metric(train, synthetic, data_percent=15):
     return [fifth_perc_rf,fifth_perc_rr,fifth_perc_ff]
     # return np.array([fifth_perc_rf,fifth_perc_rr,fifth_perc_ff,nn_fifth_perc_rf,nn_fifth_perc_rr,nn_fifth_perc_ff]).reshape(1,6) 
 #%%
-def attribute_disclosure(K, compromised, synthetic, attr_compromised, cut_points, cont_dim):
+def attribute_disclosure(K, compromised, synthetic, attr_compromised, dataset):
     dist = distance_matrix(
         compromised[attr_compromised].to_numpy(),
         synthetic[attr_compromised].to_numpy(),
         p=2)
     K_idx = dist.argsort(axis=1)[:, :K]
     
+    def most_common(lst):
+        return max(set(lst), key=lst.count)
+    
     votes = []
     trues = []
     for i in tqdm.tqdm(range(len(K_idx)), desc="Marjority vote..."):
-        st1 = 0
-        true = np.zeros((len(cut_points), ))
-        vote = np.zeros((len(cut_points), ))
-        for j in range(len(cut_points)):
-            ed1 = cut_points[j]
-            xj = synthetic.to_numpy()[K_idx[i], cont_dim + st1 : cont_dim + ed1]
-            vote[j] = xj.mean(axis=0).argmax() # majority vote
-            true[j] = compromised.to_numpy()[i, cont_dim + st1 : cont_dim + ed1].argmax()
-            st1 = ed1
+        true = np.zeros((len(dataset.discrete), ))
+        vote = np.zeros((len(dataset.discrete), ))
+        for j in range(len(dataset.discrete)):
+            true[j] = compromised.to_numpy()[i, len(dataset.continuous) + j]
+            vote[j] = most_common(list(synthetic.to_numpy()[K_idx[i], len(dataset.continuous) + j]))
         votes.append(vote)
         trues.append(true)
     votes = np.vstack(votes)
