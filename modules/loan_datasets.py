@@ -38,8 +38,16 @@ class TabularDataset(Dataset):
             'Online',
             'CreditCard'
         ]
+        self.integer = [
+            'Age',
+            'Experience',
+            'Income', 
+            'Mortgage']
         base = base[self.continuous + self.discrete]
         base = base.dropna()
+        
+        self.RegTarget = 'Age'
+        self.ClfTarget = 'Personal Loan'
         
         # one-hot encoding
         df_dummy = []
@@ -49,6 +57,7 @@ class TabularDataset(Dataset):
         
         if train:
             df = base.iloc[:4000] # train
+            self.train_raw = df
             
             self.mean = df[self.continuous].mean(axis=0)
             self.std = df[self.continuous].std(axis=0)
@@ -60,7 +69,9 @@ class TabularDataset(Dataset):
             self.x_data = df.to_numpy()
         else:
             df_train = base.iloc[:4000] # train
+            self.train_raw = df_train
             df = base.iloc[4000:] # test
+            self.test_raw = df
             
             self.mean = df_train[self.continuous].mean(axis=0)
             self.std = df_train[self.continuous].std(axis=0)

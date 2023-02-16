@@ -41,8 +41,15 @@ class TabularDataset(Dataset):
             'Gender',
             'Surge_Pricing_Type', # target variable
         ]
+        self.integer = [
+            'Var1'
+            'Var2',
+            'Var3']
         base = base[self.continuous + self.discrete]
         # [len(base[d].value_counts()) for d in discrete]
+        
+        self.RegTarget = 'Trip_Distance'
+        self.ClfTarget = 'Surge_Pricing_Type'
         
         # one-hot encoding
         df_dummy = []
@@ -52,6 +59,7 @@ class TabularDataset(Dataset):
         
         if train:
             df = base.iloc[:40000] # train
+            self.train_raw = df
             
             self.mean = df[self.continuous].mean(axis=0)
             self.std = df[self.continuous].std(axis=0)
@@ -63,7 +71,9 @@ class TabularDataset(Dataset):
             self.x_data = df.to_numpy()
         else:
             df_train = base.iloc[:40000] # train
+            self.train_raw = df_train
             df = base.iloc[40000:] # test
+            self.test_raw = df
             
             self.mean = df_train[self.continuous].mean(axis=0)
             self.std = df_train[self.continuous].std(axis=0)

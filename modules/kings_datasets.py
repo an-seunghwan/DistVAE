@@ -45,8 +45,21 @@ class TabularDataset(Dataset):
             'condition', # target variable
             'grade', 
         ]
+        self.integer = [
+            'price',
+            'sqft_living',
+            'sqft_lot',
+            'sqft_above',
+            'sqft_basement',
+            'yr_built',
+            'yr_renovated',
+            'sqft_living15',
+            'sqft_lot15',]
         base = base[self.continuous + self.discrete]
         # [len(base[d].value_counts()) for d in discrete]
+        
+        self.RegTarget = 'long'
+        self.ClfTarget = 'condition'
         
         # one-hot encoding
         df_dummy = []
@@ -56,6 +69,7 @@ class TabularDataset(Dataset):
         
         if train:
             df = base.iloc[:20000] # train
+            self.train_raw = df
             
             self.mean = df[self.continuous].mean(axis=0)
             self.std = df[self.continuous].std(axis=0)
@@ -67,7 +81,9 @@ class TabularDataset(Dataset):
             self.x_data = df.to_numpy()
         else:
             df_train = base.iloc[:20000] # train
+            self.train_raw = df_train
             df = base.iloc[20000:] # test
+            self.test_raw = df
             
             self.mean = df_train[self.continuous].mean(axis=0)
             self.std = df_train[self.continuous].std(axis=0)

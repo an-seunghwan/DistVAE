@@ -1,6 +1,7 @@
 #%%
 """
 Data Source: https://www.kaggle.com/competitions/home-credit-default-risk/data?select=application_train.csv
+Reference: https://chocoffee20.tistory.com/6
 """
 #%%
 import tqdm
@@ -18,7 +19,6 @@ from collections import namedtuple
 
 OutputInfo = namedtuple('OutputInfo', ['dim', 'activation_fn'])
 #%%
-# https://chocoffee20.tistory.com/6
 class TabularDataset(Dataset): 
     def __init__(self, train=True):
         base = pd.read_csv('./data/application_train.csv')
@@ -48,9 +48,16 @@ class TabularDataset(Dataset):
             'NAME_HOUSING_TYPE',
             'TARGET', # target variable
         ]
+        self.integer = [
+            'DAYS_BIRTH', 
+            'DAYS_EMPLOYED', 
+            'DAYS_ID_PUBLISH']
         base = base[self.continuous + self.discrete]
         base = base.dropna()
         base = base.iloc[:50000]
+        
+        self.RegTarget = 'AMT_CREDIT'
+        self.ClfTarget = 'TARGET'
         
         # one-hot encoding
         df_dummy = []
@@ -60,6 +67,7 @@ class TabularDataset(Dataset):
         
         if train:
             df = base.iloc[:45000] # train
+            self.train_raw = df
             
             self.mean = df[self.continuous].mean(axis=0)
             self.std = df[self.continuous].std(axis=0)
@@ -71,7 +79,9 @@ class TabularDataset(Dataset):
             self.x_data = df.to_numpy()
         else:
             df_train = base.iloc[:45000] # train
+            self.train_raw = df_train
             df = base.iloc[45000:] # test
+            self.test_raw = df
             
             self.mean = df_train[self.continuous].mean(axis=0)
             self.std = df_train[self.continuous].std(axis=0)

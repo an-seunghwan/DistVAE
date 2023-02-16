@@ -42,9 +42,13 @@ class TabularDataset(Dataset):
             'native-country',
             'income', # target variable
         ]
+        self.integer = self.continuous
         base = base[self.continuous + self.discrete]
         base = base.dropna()
         # [len(base[d].value_counts()) for d in self.discrete]
+        
+        self.RegTarget = 'age'
+        self.ClfTarget = 'income'
         
         # one-hot encoding
         df_dummy = []
@@ -54,6 +58,7 @@ class TabularDataset(Dataset):
         
         if train:
             df = base.iloc[:40000] # train
+            self.train_raw = df
             
             self.mean = df[self.continuous].mean(axis=0)
             self.std = df[self.continuous].std(axis=0)
@@ -65,7 +70,9 @@ class TabularDataset(Dataset):
             self.x_data = df.to_numpy()
         else:
             df_train = base.iloc[:40000] # train
+            self.train_raw = df_train
             df = base.iloc[40000:] # test
+            self.test_raw = df
             
             self.mean = df_train[self.continuous].mean(axis=0)
             self.std = df_train[self.continuous].std(axis=0)
