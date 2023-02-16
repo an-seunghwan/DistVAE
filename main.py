@@ -54,15 +54,13 @@ def get_args(debug):
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
     
-    # model configurations
     parser.add_argument("--latent_dim", default=2, type=int,
-                        help="the number of latent codes")
+                        help="the latent dimension size")
     parser.add_argument("--step", default=0.1, type=float,
                         help="interval size of quantile levels")
     
-    # optimization options
     parser.add_argument('--epochs', default=100, type=int,
-                        help='maximum iteration')
+                        help='the number of epochs')
     parser.add_argument('--batch_size', default=256, type=int,
                         help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float,
@@ -70,9 +68,8 @@ def get_args(debug):
     parser.add_argument('--threshold', default=1e-5, type=float,
                         help='threshold for clipping alpha_tilde')
     
-    # loss coefficients
     parser.add_argument('--beta', default=0.1, type=float,
-                        help='observation noise')
+                        help='scale parameter of asymmetric Laplace distribution')
   
     if debug:
         return parser.parse_args(args=[])
@@ -103,8 +100,6 @@ def main():
     softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
     config["CRPS_dim"] = CRPS_dim
     config["softmax_dim"] = softmax_dim
-    # len(OutputInfo_list) - CRPS_dim
-    # config["input_dim"] = dataset.x_data.shape[1]
     #%%
     model = VAE(config, device).to(device)
     
@@ -127,7 +122,7 @@ def main():
     #%%
     """model save"""
     torch.save(model.state_dict(), './assets/DistVAE_{}.pth'.format(config["dataset"]))
-    # artifact = wandb.Artifact('beta{}_DistVAE_{}'.format(config["beta"], config["dataset"]), 
+    # artifact = wandb.Artifact('beta{}_{}'.format(config["beta"], config["dataset"]), 
     #                         type='model',
     #                         metadata=config) # description=""
     artifact = wandb.Artifact('DistVAE_{}'.format(config["dataset"]), 
