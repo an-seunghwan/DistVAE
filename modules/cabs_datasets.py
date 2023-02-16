@@ -55,11 +55,14 @@ class TabularDataset(Dataset):
         df_dummy = []
         for d in self.discrete:
             df_dummy.append(pd.get_dummies(base[d], prefix=d))
-        base = pd.concat([base.drop(columns=self.discrete)] + df_dummy, axis=1)
+        base_dummy = pd.concat([base.drop(columns=self.discrete)] + df_dummy, axis=1)
+        
+        split_num = 40000
         
         if train:
-            df = base.iloc[:40000] # train
-            self.train_raw = df
+            self.train_raw = base.iloc[:split_num]
+            
+            df = base_dummy.iloc[:split_num] # train
             
             self.mean = df[self.continuous].mean(axis=0)
             self.std = df[self.continuous].std(axis=0)
@@ -70,10 +73,11 @@ class TabularDataset(Dataset):
             self.train = df
             self.x_data = df.to_numpy()
         else:
-            df_train = base.iloc[:40000] # train
-            self.train_raw = df_train
-            df = base.iloc[40000:] # test
-            self.test_raw = df
+            self.train_raw = base.iloc[:split_num]
+            self.test_raw = base.iloc[split_num:]
+            
+            df_train = base_dummy.iloc[:split_num] # train
+            df = base_dummy.iloc[split_num:] # test
             
             self.mean = df_train[self.continuous].mean(axis=0)
             self.std = df_train[self.continuous].std(axis=0)
