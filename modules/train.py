@@ -55,7 +55,7 @@ def train_VAE(OutputInfo_list, dataloader, model, config, optimizer, device):
                 out = logit[:, st : ed]
                 # tmp1.append(x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + ed])
                 # tmp2.append(out)
-                total_loss += nn.CrossEntropyLoss()(out, targets)
+                total_loss += config["beta"] * nn.CrossEntropyLoss()(out, targets)
                 st = ed
         
         # assert (torch.cat(tmp1, dim=1) - x_batch).sum().item() == 0
