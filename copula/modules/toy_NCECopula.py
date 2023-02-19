@@ -77,12 +77,17 @@ class NCECopula():
         for t in tqdm.tqdm(range(1, test_size), desc="Gibbs Sampling..."):
             for i in range(self.config["data_dim"]):
                 if i == 0:
+                    # (t-1)th sample -> coordinates 1, ..., d-1
+                    # (t)th sample -> coordinate 0 : grid point approximate
                     uv_i_vector = np.concatenate(
                         (a.reshape(-1, 1), np.repeat(
                             uv_samples[t-1, i+1:self.config["data_dim"]],
                             repeats=self.config["grid_points"], axis=0).reshape(-1, 1)),axis=1)
                     
                 elif i > 0 and i < self.config["data_dim"]-1:
+                    # (t-1)th sample -> coordinates k+1, ..., d-1 where k > 0
+                    # (t)th sample -> coordinate 0, ..., k-1
+                    # (t)th sample -> coordinate k : grid point approximate
                     uv_i_vector_left = np.concatenate(
                         (np.repeat(
                             uv_samples[t, 0:i],
@@ -95,6 +100,8 @@ class NCECopula():
                             repeats=self.config["grid_points"], axis=0).reshape(-1, 1)), axis=1)
                     
                 else:
+                    # (t-1)th sample -> coordinates 0, 1, ..., d-2
+                    # (t)th sample -> coordinate d-1 : grid point approximate
                     uv_i_vector = np.concatenate(
                         (np.repeat(
                             uv_samples[t, 0:i],
