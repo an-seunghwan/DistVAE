@@ -18,7 +18,7 @@ def get_args(debug):
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
     
-    parser.add_argument('--grid_points', type=int, default=21, 
+    parser.add_argument('--grid_points', type=int, default=51, 
                         help='Number of points to approximate conditional distribution in Gibbs sampling')
     parser.add_argument('--data_dim', default=2,
                         help='d-dimension')
@@ -37,7 +37,7 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -47,7 +47,7 @@ def main():
         torch.cuda.manual_seed(config["seed"])
     #%%
     """data generation"""
-    n = 10000
+    n = 10000 # the number of data samples
     sigma = 0.1
     t = torch.randn(n, 1)
     x = torch.cat(
@@ -73,10 +73,10 @@ def main():
     """visualization"""
     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
     ax[0].scatter(pseudo[:, 0], pseudo[:, 1],
-                alpha=0.5)
+                alpha=0.2)
     ax[0].set_title('Ground-Truth', fontsize=15)
     ax[1].scatter(uv_samples[:, 0], uv_samples[:, 1],
-                alpha=0.5)
+                alpha=0.2)
     ax[1].set_title('NCE', fontsize=15)
     plt.tight_layout()
     plt.savefig('./assets/toy_sampled.png')
@@ -89,7 +89,7 @@ def main():
     )
     sns.jointplot(
         x="U1", y="U2",
-        alpha=0.5,
+        alpha=0.2,
         data=df_samples,
         height=5);
     plt.tight_layout()
