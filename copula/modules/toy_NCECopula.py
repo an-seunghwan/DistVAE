@@ -38,7 +38,7 @@ class NCECopula():
         print(self.model)
         
         """training: Noise contrastive estimation"""
-        for i in range(self.config["iterations"]):
+        for i in range(self.config["iterations"]+1):
             self.optimizer.zero_grad()
 
             idx = np.random.choice(
@@ -55,8 +55,8 @@ class NCECopula():
             self.optimizer.step()
             
             if verbose:
-                if i % 100 == 0:
-                    print_input = "[Iter {:03d}]".format(i + 1)
+                if (i+1) % 100 == 1:
+                    print_input = "[Iter {:03d}]".format(i)
                     print_input += ''.join([', Loss: {:.4f}'.format(loss)])
                     print(print_input)
                     
@@ -67,14 +67,14 @@ class NCECopula():
         return inv_cdf
     
     """Gibbs sampling"""
-    def gibbs_sampling(self, test_size):
+    def gibbs_sampling(self, test_size, burn_in=100):
         self.model.eval()
 
         a = np.linspace(0, 1, self.config["grid_points"])
-        uv_samples = np.zeros((test_size, self.config["data_dim"]))
+        uv_samples = np.zeros((burn_in + test_size, self.config["data_dim"]))
         uv_samples[0, :] = np.random.uniform(0, 1, self.config["data_dim"]) # random initialization
         
-        for t in tqdm.tqdm(range(1, test_size), desc="Gibbs Sampling..."):
+        for t in tqdm.tqdm(range(1, burn_in + test_size), desc="Gibbs Sampling..."):
             for i in range(self.config["data_dim"]):
                 if i == 0:
                     # (t-1)th sample -> coordinates 1, ..., d-1
@@ -117,6 +117,9 @@ class NCECopula():
                     conditional_density.numpy().squeeze(1),
                     np.linspace(0, 1, self.config["grid_points"] + 1))
                 uv_samples[t, i] = icdf(np.random.uniform())
-
+        
+        # burn-in period
+        uv_samples = uv_samples[burn_in:, ]
+        assert len(uv_samples) == test_size
         return uv_samples
 #%%
