@@ -51,7 +51,7 @@ def get_args(debug):
                         help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    parser.add_argument('--beta', default=0.1, type=float,
+    parser.add_argument('--beta', default=0.5, type=float,
                         help='observation noise')
 
     if debug:
