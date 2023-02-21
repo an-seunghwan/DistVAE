@@ -22,7 +22,8 @@ from torch.utils.data import Dataset
 from modules.simulation import set_random_seed
 from modules.model import VAE
 
-from statsmodels.distributions.empirical_distribution import ECDF
+from copula_modules.copula import NCECopula
+from copula_modules.train import train_copula
 #%%
 import sys
 import subprocess
@@ -38,7 +39,7 @@ except:
 run = wandb.init(
     project="DistVAE", 
     entity="anseunghwan",
-    tags=['DistVAE', 'Pseudo'],
+    tags=['DistVAE', 'Copula'],
 )
 #%%
 import argparse
@@ -49,8 +50,21 @@ def get_args(debug):
                         help='model version')
     parser.add_argument('--dataset', type=str, default='credit', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
+    # parser.add_argument('--seed', type=int, default=1, 
+    #                     help='seed for repeatable results')
+    
+    parser.add_argument("--latent_dim", default=2, type=int,
+                        help="the latent dimension size")
+    
+    parser.add_argument('--epochs', default=100, type=int,
+                        help='the number of epochs')
+    parser.add_argument('--batch_size', default=256, type=int,
+                        help='batch size')
+    parser.add_argument('--lr', default=1e-3, type=float,
+                        help='learning rate')
+    
     parser.add_argument('--beta', default=0.5, type=float,
-                        help='observation noise')
+                        help='scale parameter of asymmetric Laplace distribution')
 
     if debug:
         return parser.parse_args(args=[])
@@ -59,15 +73,15 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=True)) # default configuration
+    config = vars(get_args(debug=False)) # default configuration
     
-    """model load"""
+    """DistVAE model (Stage 1) load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
         config["beta"], config["dataset"], config["num"]), type='model')
     # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
     #     config["dataset"], config["num"]), type='model')
-    for key, item in artifact.metadata.items():
-        config[key] = item
+    stage1_config = dict(artifact.metadata.items())
+    config["seed"] = config["num"]
     model_dir = artifact.download()
     
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
@@ -94,8 +108,9 @@ def main():
     softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
     config["CRPS_dim"] = CRPS_dim
     config["softmax_dim"] = softmax_dim
+    config["data_dim"] = len(OutputInfo_list)
     #%%
-    model = VAE(config, device).to(device)
+    model = VAE(stage1_config, device).to(device)
     if config["cuda"]:
         model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
         model.load_state_dict(
@@ -109,31 +124,28 @@ def main():
     
     model.eval()
     #%%
-    for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
-        if config["cuda"]:
-            x_batch = x_batch.cuda()
+    """Copula Model"""
+    copula = NCECopula(config, device)
+    #%%
+    for epoch in range(config["epochs"]):
+        logs = train_copula(OutputInfo_list, dataloader, model, copula, config)
         
-        """pseudo-observations"""
-        z, mean, logvar, gamma, beta, logit = model(x_batch, deterministic=True)
-        # continuous
-        alpha_tilde_list = model.quantile_inverse(x_batch, gamma, beta)
-        cont_pseudo = torch.cat(alpha_tilde_list, dim=1)
-        # discrete
-        disc_pseudo = []
-        st = 0
-        for j, info in enumerate(OutputInfo_list):
-            if info.activation_fn == "CRPS":
-                continue
-            elif info.activation_fn == "softmax":
-                ed = st + info.dim
-                out = logit[:, st : ed]
-                cdf = nn.Softmax(dim=1)(out).cumsum(dim=1)
-                x_ = x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + ed]
-                disc_pseudo.append((cdf * x_).sum(axis=1, keepdims=True))
-                st = ed
-        disc_pseudo = torch.cat(disc_pseudo, dim=1)
-        #%%
-        pseudo = torch.cat([cont_pseudo, disc_pseudo], dim=1)
+        print_input = "[epoch {:03d}]".format(epoch + 1)
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
+        print(print_input)
+        
+        """update log"""
+        wandb.log({x : np.mean(y) for x, y in logs.items()})
+    #%%
+    """Copula model save"""
+    torch.save(copula.model.state_dict(), './assets/Copula_{}.pth'.format(config["dataset"]))
+    artifact = wandb.Artifact('beta{}_Copula_{}'.format(config["beta"], config["dataset"]), 
+                            type='model',
+                            metadata=config) # description=""
+    artifact.add_file('./assets/Copula_{}.pth'.format(config["dataset"]))
+    artifact.add_file('./main.py')
+    artifact.add_file('./copula_modules/copula.py')
+    wandb.log_artifact(artifact)
     #%%
     wandb.run.finish()
 #%%

@@ -68,7 +68,7 @@ def get_args(debug):
     parser.add_argument('--threshold', default=1e-5, type=float,
                         help='threshold for clipping alpha_tilde')
     
-    parser.add_argument('--beta', default=0.1, type=float,
+    parser.add_argument('--beta', default=0.5, type=float,
                         help='scale parameter of asymmetric Laplace distribution')
   
     if debug:
@@ -122,12 +122,12 @@ def main():
     #%%
     """model save"""
     torch.save(model.state_dict(), './assets/DistVAE_{}.pth'.format(config["dataset"]))
-    # artifact = wandb.Artifact('beta{}_{}'.format(config["beta"], config["dataset"]), 
-    #                         type='model',
-    #                         metadata=config) # description=""
-    artifact = wandb.Artifact('DistVAE_{}'.format(config["dataset"]), 
+    artifact = wandb.Artifact('beta{}_{}'.format(config["beta"], config["dataset"]), 
                             type='model',
                             metadata=config) # description=""
+    # artifact = wandb.Artifact('DistVAE_{}'.format(config["dataset"]), 
+    #                         type='model',
+    #                         metadata=config) # description=""
     artifact.add_file('./assets/DistVAE_{}.pth'.format(config["dataset"]))
     artifact.add_file('./main.py')
     artifact.add_file('./modules/model.py')
