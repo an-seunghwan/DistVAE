@@ -11,21 +11,45 @@ import scipy.interpolate as interpolate
 import torch
 from torch import nn
 #%%
+class Discriminator(nn.Module):
+    def __init__(self, config, device):
+        super(Discriminator, self).__init__()
+        
+        self.config = config
+        self.device = device
+        
+        self.mlp1 = nn.Sequential(
+            nn.Linear(config["data_dim"], 128),
+            nn.LeakyReLU(0.1),
+            nn.Linear(128, 128),
+            nn.LeakyReLU(0.1),
+            nn.Linear(128, 128),
+            nn.LeakyReLU(0.1),
+            nn.Linear(128, config["latent_dim"]),
+            nn.LeakyReLU(0.1),
+        ).to(device)
+        
+        self.mlp2 = nn.Sequential(
+            nn.Linear(2 * config["latent_dim"], 32),
+            nn.LeakyReLU(0.1),
+            nn.Linear(32, 32),
+            nn.LeakyReLU(0.1),
+            nn.Linear(32, 1),
+            nn.Sigmoid(),
+        ).to(device)
+        
+    def forward(self, data):
+        h = self.mlp1(data[:, : self.config["data_dim"]])
+        h = torch.cat([h, data[:, self.config["data_dim"] : ]], dim=1)
+        h = self.mlp2(h)
+        return h
+#%%
 class NCECopula():
     def __init__(self, config, device):
         self.config = config
         
         """model"""
-        self.model = nn.Sequential(
-            nn.Linear(config["data_dim"] + config["latent_dim"], 100),
-            nn.LeakyReLU(0.1),
-            nn.Linear(100, 100),
-            nn.LeakyReLU(0.1),
-            nn.Linear(100, 100),
-            nn.LeakyReLU(0.1),
-            nn.Linear(100, 1),
-            nn.Sigmoid()
-        ).to(device)
+        self.model = Discriminator(config, device)
 
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), 
