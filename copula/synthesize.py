@@ -10,6 +10,9 @@ from PIL import Image
 import matplotlib.pyplot as plt
 # plt.switch_backend('agg')
 
+import sys
+sys.path.append('..')
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -18,6 +21,8 @@ from torch.utils.data import Dataset
 
 from modules.simulation import set_random_seed
 from modules.model import VAE
+from copula_modules.copula import NCECopula
+
 from modules.evaluation import (
     regression_eval,
     classification_eval,
@@ -40,16 +45,16 @@ except:
 run = wandb.init(
     project="DistVAE", 
     entity="anseunghwan",
-    tags=['DistVAE', 'Synthetic'],
+    tags=['DistVAE', 'Copula', 'Synthetic'],
 )
 #%%
 import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=0, 
+    parser.add_argument('--num', type=int, default=1, 
                         help='model version')
-    parser.add_argument('--dataset', type=str, default='covtype', 
+    parser.add_argument('--dataset', type=str, default='credit', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
     parser.add_argument('--beta', default=0.5, type=float,
                         help='observation noise')
@@ -61,16 +66,22 @@ def get_args(debug):
 #%%
 def main():
     #%%
-    config = vars(get_args(debug=False)) # default configuration
+    config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
         config["beta"], config["dataset"], config["num"]), type='model')
     # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
     #     config["dataset"], config["num"]), type='model')
+    stage1_config = dict(artifact.metadata.items())
+    model_dir = artifact.download()
+    #%%
+    """Copula model load"""
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_Copula_{}:v{}'.format(
+        config["beta"], config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
-    model_dir = artifact.download()
+    copula_model_dir = artifact.download()
     
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
         os.makedirs('./assets/{}'.format(config["dataset"]))
@@ -96,8 +107,9 @@ def main():
     softmax_dim = sum([x.dim for x in OutputInfo_list if x.activation_fn == 'softmax'])
     config["CRPS_dim"] = CRPS_dim
     config["softmax_dim"] = softmax_dim
+    config["data_dim"] = len(OutputInfo_list)
     #%%
-    model = VAE(config, device).to(device)
+    model = VAE(stage1_config, device).to(device)
     if config["cuda"]:
         model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
         model.load_state_dict(
@@ -111,15 +123,87 @@ def main():
     
     model.eval()
     #%%
+    copula = NCECopula(config, device)
+    if config["cuda"]:
+        model_name = [x for x in os.listdir(copula_model_dir) if x.endswith('pth')][0]
+        copula.model.load_state_dict(
+            torch.load(
+                copula_model_dir + '/' + model_name))
+    else:
+        model_name = [x for x in os.listdir(copula_model_dir) if x.endswith('pth')][0]
+        copula.model.load_state_dict(
+            torch.load(
+                copula_model_dir + '/' + model_name, map_location=torch.device('cpu')))
+    
+    copula.model.eval()
+    #%%
     """Number of Parameters"""
     count_parameters = lambda model: sum(p.numel() for p in model.parameters() if p.requires_grad)
-    num_params = count_parameters(model)
+    num_params = count_parameters(copula.model)
     print("Number of Parameters:", num_params)
     wandb.log({'Number of Parameters': num_params})
     #%%
     """Synthetic Data Generation"""
     n = len(dataset.train)
-    syndata = model.generate_data(n, OutputInfo_list, dataset)
+    burn_in = 1000
+    grid_points = 51
+    
+    a = np.linspace(0, 1, grid_points)
+    uv_samples = np.zeros((burn_in, config["data_dim"]))
+    uv_samples[0, :] = np.random.uniform(0, 1, config["data_dim"]) # random initialization
+    
+    z = np.random.normal(size=(1, config["latent_dim"]))
+    z = np.repeat(z, repeats=grid_points, axis=0).reshape(-1, config["latent_dim"]) # fixed
+    
+    for t in tqdm.tqdm(range(1, burn_in), desc="Gibbs Sampling..."):
+        for i in range(config["data_dim"]):
+            if i == 0:
+                # (t-1)th sample -> coordinates 1, ..., d-1
+                # (t)th sample -> coordinate 0 : grid point approximate
+                uv_i_vector = np.concatenate(
+                    (a.reshape(-1, 1), np.repeat(
+                        uv_samples[[t-1], i+1:config["data_dim"]],
+                        repeats=grid_points, axis=0).reshape(grid_points, -1)), axis=1)
+                
+            elif i > 0 and i < config["data_dim"] - 1:
+                # (t-1)th sample -> coordinates k+1, ..., d-1 where k > 0
+                # (t)th sample -> coordinate 0, ..., k-1
+                # (t)th sample -> coordinate k : grid point approximate
+                uv_i_vector_left = np.concatenate(
+                    (np.repeat(
+                        uv_samples[[t], 0:i],
+                        repeats=grid_points, axis=0).reshape(grid_points, -1),
+                    a.reshape(-1, 1)), axis=1)
+                uv_i_vector = np.concatenate(
+                    (uv_i_vector_left, 
+                    np.repeat(
+                        uv_samples[[t-1], i+1:config["data_dim"]],
+                        repeats=grid_points, axis=0).reshape(grid_points, -1)), axis=1)
+                
+            else:
+                # (t-1)th sample -> coordinates 0, 1, ..., d-2
+                # (t)th sample -> coordinate d-1 : grid point approximate
+                uv_i_vector = np.concatenate(
+                    (np.repeat(
+                        uv_samples[[t], 0:i],
+                        repeats=grid_points, axis=0).reshape(grid_points, -1),
+                    a.reshape(-1, 1)), axis=1)
+            
+            with torch.no_grad():
+                h = copula.model(
+                        torch.cat([
+                            torch.from_numpy(uv_i_vector).to(torch.float32),
+                            torch.from_numpy(z).to(torch.float32)], dim=1))
+            conditional_density = h / (1 - h + 1e-6)
+            conditional_density /= conditional_density.sum()
+            
+            icdf = copula.inverse_transform_sampling(
+                conditional_density.numpy().squeeze(1),
+                np.linspace(0, 1, grid_points + 1))
+            uv_samples[t, i] = icdf(np.random.uniform())
+    #%%
+    for i in range(uv_samples.shape[1]):
+        plt.plot(uv_samples[:, i])
     #%%
     print("\nStatistical Similarity...\n")
     Dn, W1 = statistical_similarity(
