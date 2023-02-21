@@ -23,8 +23,6 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.1),
             nn.Linear(128, 128),
             nn.LeakyReLU(0.1),
-            nn.Linear(128, 128),
-            nn.LeakyReLU(0.1),
             nn.Linear(128, config["latent_dim"]),
             nn.LeakyReLU(0.1),
         ).to(device)
@@ -32,10 +30,8 @@ class Discriminator(nn.Module):
         self.mlp2 = nn.Sequential(
             nn.Linear(2 * config["latent_dim"], 32),
             nn.LeakyReLU(0.1),
-            nn.Linear(32, 32),
-            nn.LeakyReLU(0.1),
             nn.Linear(32, 1),
-            nn.Sigmoid(),
+            nn.Softplus(),
         ).to(device)
         
     def forward(self, data):
