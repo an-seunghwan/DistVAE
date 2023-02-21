@@ -18,7 +18,7 @@ def train_copula(OutputInfo_list, dataloader, model, copula, config):
         
         with torch.no_grad():
             """pseudo-observations"""
-            z, mean, logvar, gamma, beta, logit = model(x_batch, deterministic=True)
+            z, mean, logvar, gamma, beta, logit = model(x_batch, deterministic=False)
             # continuous
             alpha_tilde_list = model.quantile_inverse(x_batch, gamma, beta)
             cont_pseudo = torch.cat(alpha_tilde_list, dim=1)
@@ -48,7 +48,7 @@ def train_copula(OutputInfo_list, dataloader, model, copula, config):
         noise = copula.model(
             torch.cat([uniform, z], dim=1))
         
-        loss = - (true.log() + (1 - noise).log()).mean()
+        loss = - (torch.log(true + 1e-6) + torch.log(1 - noise + 1e-6)).mean() # numerical stability
             
         loss.backward()
         copula.optimizer.step()
