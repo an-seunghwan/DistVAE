@@ -52,7 +52,7 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=1, 
+    parser.add_argument('--num', type=int, default=0, 
                         help='model version')
     parser.add_argument('--dataset', type=str, default='credit', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
@@ -194,7 +194,7 @@ def main():
                         torch.cat([
                             torch.from_numpy(uv_i_vector).to(torch.float32),
                             torch.from_numpy(z).to(torch.float32)], dim=1))
-            conditional_density = h / (1 - h + 1e-6)
+            conditional_density = h
             conditional_density /= conditional_density.sum()
             
             icdf = copula.inverse_transform_sampling(

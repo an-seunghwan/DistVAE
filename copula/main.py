@@ -128,7 +128,7 @@ def main():
     copula = NCECopula(config, device)
     #%%
     for epoch in range(config["epochs"]):
-        logs = train_copula(OutputInfo_list, dataloader, model, copula, config)
+        logs = train_copula(OutputInfo_list, dataloader, model, copula, config, device)
         
         print_input = "[epoch {:03d}]".format(epoch + 1)
         print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
