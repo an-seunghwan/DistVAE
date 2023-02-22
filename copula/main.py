@@ -48,24 +48,23 @@ def get_args(debug):
     
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
-    parser.add_argument('--dataset', type=str, default='credit', 
+    parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
+    parser.add_argument('--beta', default=0.5, type=float,
+                        help='scale parameter of asymmetric Laplace distribution')
     # parser.add_argument('--seed', type=int, default=1, 
     #                     help='seed for repeatable results')
     
     parser.add_argument("--latent_dim", default=2, type=int,
                         help="the latent dimension size")
     
-    parser.add_argument('--epochs', default=100, type=int,
+    parser.add_argument('--epochs', default=150, type=int,
                         help='the number of epochs')
     parser.add_argument('--batch_size', default=256, type=int,
                         help='batch size')
     parser.add_argument('--lr', default=1e-3, type=float,
                         help='learning rate')
     
-    parser.add_argument('--beta', default=0.5, type=float,
-                        help='scale parameter of asymmetric Laplace distribution')
-
     if debug:
         return parser.parse_args(args=[])
     else:    

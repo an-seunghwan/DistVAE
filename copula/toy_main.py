@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 from statsmodels.distributions.empirical_distribution import ECDF
 import torch
-from modules.toy_NCECopula import NCECopula
+from copula_modules.toy_NCECopula import NCECopula
 #%%
 import argparse
 def get_args(debug):
