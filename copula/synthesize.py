@@ -54,10 +54,10 @@ def get_args(debug):
     
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
-    parser.add_argument('--dataset', type=str, default='credit', 
+    parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    parser.add_argument('--beta', default=0.5, type=float,
-                        help='observation noise')
+    # parser.add_argument('--beta', default=0.5, type=float,
+    #                     help='observation noise')
 
     if debug:
         return parser.parse_args(args=[])
@@ -69,16 +69,18 @@ def main():
     config = vars(get_args(debug=True)) # default configuration
     
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
-        config["beta"], config["dataset"], config["num"]), type='model')
-    # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
-    #     config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
+    #     config["beta"], config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+        config["dataset"], config["num"]), type='model')
     stage1_config = dict(artifact.metadata.items())
     model_dir = artifact.download()
     #%%
     """Copula model load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_Copula_{}:v{}'.format(
-        config["beta"], config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_Copula_{}:v{}'.format(
+    #     config["beta"], config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/Copula_{}:v{}'.format(
+        config["dataset"], config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
     copula_model_dir = artifact.download()
@@ -100,6 +102,7 @@ def main():
     TabularDataset = dataset_module.TabularDataset
     
     dataset = TabularDataset()
+    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True)
     test_dataset = TabularDataset(train=False)
     
     OutputInfo_list = dataset.OutputInfo_list
@@ -143,67 +146,108 @@ def main():
     print("Number of Parameters:", num_params)
     wandb.log({'Number of Parameters': num_params})
     #%%
-    """Synthetic Data Generation"""
+    """Gibbs sampling from copula CDF"""
     n = len(dataset.train)
-    burn_in = 1000
-    grid_points = 51
-    
-    a = np.linspace(0, 1, grid_points)
-    uv_samples = np.zeros((burn_in, config["data_dim"]))
-    uv_samples[0, :] = np.random.uniform(0, 1, config["data_dim"]) # random initialization
-    
-    z = np.random.normal(size=(1, config["latent_dim"]))
-    z = np.repeat(z, repeats=grid_points, axis=0).reshape(-1, config["latent_dim"]) # fixed
-    
-    for t in tqdm.tqdm(range(1, burn_in), desc="Gibbs Sampling..."):
-        for i in range(config["data_dim"]):
-            if i == 0:
-                # (t-1)th sample -> coordinates 1, ..., d-1
-                # (t)th sample -> coordinate 0 : grid point approximate
-                uv_i_vector = np.concatenate(
-                    (a.reshape(-1, 1), np.repeat(
-                        uv_samples[[t-1], i+1:config["data_dim"]],
-                        repeats=grid_points, axis=0).reshape(grid_points, -1)), axis=1)
-                
-            elif i > 0 and i < config["data_dim"] - 1:
-                # (t-1)th sample -> coordinates k+1, ..., d-1 where k > 0
-                # (t)th sample -> coordinate 0, ..., k-1
-                # (t)th sample -> coordinate k : grid point approximate
-                uv_i_vector_left = np.concatenate(
-                    (np.repeat(
-                        uv_samples[[t], 0:i],
-                        repeats=grid_points, axis=0).reshape(grid_points, -1),
-                    a.reshape(-1, 1)), axis=1)
-                uv_i_vector = np.concatenate(
-                    (uv_i_vector_left, 
-                    np.repeat(
-                        uv_samples[[t-1], i+1:config["data_dim"]],
-                        repeats=grid_points, axis=0).reshape(grid_points, -1)), axis=1)
-                
-            else:
-                # (t-1)th sample -> coordinates 0, 1, ..., d-2
-                # (t)th sample -> coordinate d-1 : grid point approximate
-                uv_i_vector = np.concatenate(
-                    (np.repeat(
-                        uv_samples[[t], 0:i],
-                        repeats=grid_points, axis=0).reshape(grid_points, -1),
-                    a.reshape(-1, 1)), axis=1)
-            
-            with torch.no_grad():
-                h = copula.model(
-                        torch.cat([
-                            torch.from_numpy(uv_i_vector).to(torch.float32),
-                            torch.from_numpy(z).to(torch.float32)], dim=1))
-            conditional_density = h
-            conditional_density /= conditional_density.sum()
-            
-            icdf = copula.inverse_transform_sampling(
-                conditional_density.numpy().squeeze(1),
-                np.linspace(0, 1, grid_points + 1))
-            uv_samples[t, i] = icdf(np.random.uniform())
+    # z = torch.randn(1, config["latent_dim"])
+    z = torch.zeros(1, config["latent_dim"])
+    burn_in = 5000
+    grid_points = 101
+    pseudo_samples = copula.gibbs_sampling(
+        z=z, test_size=0, burn_in=burn_in, grid_points=grid_points)    
+    pseudo_samples = torch.from_numpy(pseudo_samples).to(z.dtype)
     #%%
-    for i in range(uv_samples.shape[1]):
-        plt.plot(uv_samples[:, i])
+    with torch.no_grad():
+        gamma, beta, logit = model.quantile_parameter(z)
+        
+        samples = []
+        st = 0
+        for j, info in enumerate(OutputInfo_list):
+            if info.activation_fn == "CRPS":
+                samples.append(
+                    model.quantile_function(
+                        pseudo_samples, gamma, beta, j)
+                )
+                
+            elif info.activation_fn == "softmax":
+                ed = st + info.dim
+                out = logit[:, st : ed]
+                cdf = nn.Softmax(dim=1)(out).cumsum(dim=1)
+                label = pseudo_samples[:, [j]] > cdf
+                samples.append(label.sum(dim=1, keepdims=True))
+                st = ed
+
+        samples = torch.cat(samples, dim=1)
+    #%%
+    corr = np.corrcoef(pseudo_samples.t())
+    corr[corr == 1] = 0
+    x, y = np.where(corr > 0.3)
+    #%%
+    fig, ax = plt.subplots(2, len(x) // 2 + 1, figsize=(15, 5))
+    for i in range(len(x)):
+        ax.flatten()[i].scatter(
+            pseudo_samples[100:, x[i]], pseudo_samples[100:, y[i]],
+            alpha=0.2)
+    plt.tight_layout()
+    # discard = 1000
+    # plt.scatter(
+    #     samples[discard:, 3], samples[discard:, 4],
+    #     alpha=0.5)
+    #%%
+    pseudo = []
+    with torch.no_grad():
+        for (x_batch) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
+            if config["cuda"]:
+                x_batch = x_batch.cuda()
+            
+            """pseudo-observations"""
+            # z, mean, logvar, gamma, beta, logit = model(x_batch, deterministic=True)
+            z_ = torch.repeat_interleave(
+                z,
+                repeats=x_batch.size(0),
+                dim=0
+            )
+            gamma, beta, logit = model.quantile_parameter(z_)
+            
+            # continuous
+            alpha_tilde_list = model.quantile_inverse(x_batch, gamma, beta)
+            cont_pseudo = torch.cat(alpha_tilde_list, dim=1)
+            # discrete
+            disc_pseudo = []
+            st = 0
+            for j, info in enumerate(OutputInfo_list):
+                if info.activation_fn == "CRPS":
+                    continue
+                elif info.activation_fn == "softmax":
+                    ed = st + info.dim
+                    out = logit[:, st : ed]
+                    cdf = nn.Softmax(dim=1)(out).cumsum(dim=1)
+                    x_ = x_batch[:, config["CRPS_dim"] + st : config["CRPS_dim"] + ed]
+                    disc_pseudo.append((cdf * x_).sum(axis=1, keepdims=True))
+                    st = ed
+            disc_pseudo = torch.cat(disc_pseudo, dim=1)
+            
+            pseudo.append(torch.cat([cont_pseudo, disc_pseudo], dim=1))
+    pseudo = torch.cat(pseudo, dim=0)
+    pseudo = pseudo[:burn_in, :]
+    #%%
+    fig, ax = plt.subplots(2, len(x) // 2 + 1, figsize=(15, 5))
+    for i in range(len(x)):
+        ax.flatten()[i].scatter(
+            pseudo[:, x[i]], pseudo[:, y[i]],
+            alpha=0.2)
+    plt.tight_layout()
+    # plt.scatter(
+    #     pseudo[:, 3], pseudo[:, 4],
+    #     alpha=0.1)
+    #%%
+    corr = np.corrcoef(pseudo_samples.t())
+    corr[corr == 1] = 0
+    print(corr[corr > 0.3])
+    corr = np.corrcoef(pseudo.t())
+    corr[corr == 1] = 0
+    print(corr[corr > 0.3])
+    #%%
+    """XXX"""
     #%%
     print("\nStatistical Similarity...\n")
     Dn, W1 = statistical_similarity(
