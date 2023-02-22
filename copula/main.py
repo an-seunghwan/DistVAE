@@ -46,15 +46,17 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
+    # Stage 1
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    parser.add_argument('--beta', default=0.5, type=float,
-                        help='scale parameter of asymmetric Laplace distribution')
+    # parser.add_argument('--beta', default=0.5, type=float,
+    #                     help='scale parameter of asymmetric Laplace distribution')
     # parser.add_argument('--seed', type=int, default=1, 
     #                     help='seed for repeatable results')
     
+    # Stage 2
     parser.add_argument("--latent_dim", default=2, type=int,
                         help="the latent dimension size")
     
@@ -75,10 +77,10 @@ def main():
     config = vars(get_args(debug=False)) # default configuration
     
     """DistVAE model (Stage 1) load"""
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
-        config["beta"], config["dataset"], config["num"]), type='model')
-    # artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
-    #     config["dataset"], config["num"]), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
+    #     config["beta"], config["dataset"], config["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+        config["dataset"], config["num"]), type='model')
     stage1_config = dict(artifact.metadata.items())
     config["seed"] = config["num"]
     model_dir = artifact.download()
@@ -138,7 +140,10 @@ def main():
     #%%
     """Copula model save"""
     torch.save(copula.model.state_dict(), './assets/Copula_{}.pth'.format(config["dataset"]))
-    artifact = wandb.Artifact('beta{}_Copula_{}'.format(config["beta"], config["dataset"]), 
+    # artifact = wandb.Artifact('beta{}_Copula_{}'.format(config["beta"], config["dataset"]), 
+    #                         type='model',
+    #                         metadata=config) # description=""
+    artifact = wandb.Artifact('Copula_{}'.format(config["dataset"]), 
                             type='model',
                             metadata=config) # description=""
     artifact.add_file('./assets/Copula_{}.pth'.format(config["dataset"]))
