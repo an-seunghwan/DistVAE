@@ -65,11 +65,11 @@ class NCECopula():
         return inv_cdf
     
     """Gibbs sampling"""
-    def gibbs_sampling(self, z, test_size, burn_in=100, grid_points=51):
+    def gibbs_sampling(self, z, sample_size, burn_in, grid_points):
         self.model.eval()
 
         a = np.linspace(0, 1, grid_points)
-        samples = np.zeros((burn_in + test_size, self.config["data_dim"]))
+        samples = np.zeros((burn_in + sample_size, self.config["data_dim"]))
         samples[0, :] = np.random.uniform(0, 1, self.config["data_dim"]) # random initialization
         
         assert z.shape == (1, self.config["latent_dim"])
@@ -79,7 +79,8 @@ class NCECopula():
             repeats=grid_points, 
             axis=0).reshape(-1, self.config["latent_dim"]) # fixed
         
-        for t in tqdm.tqdm(range(1, burn_in + test_size), desc="Gibbs Sampling..."):
+        # for t in tqdm.tqdm(range(1, burn_in + sample_size), desc="Gibbs Sampling..."):
+        for t in range(1, burn_in + sample_size):
             for i in range(self.config["data_dim"]):
                 if i == 0:
                     # (t-1)th sample -> coordinates 1, ..., d-1
@@ -126,8 +127,8 @@ class NCECopula():
                     np.linspace(0, 1, grid_points + 1))
                 samples[t, i] = icdf(np.random.uniform())
         
-        # # burn-in period
+        # burn-in period
         # samples = samples[burn_in:, ]
-        # assert len(samples) == test_size
+        # assert len(samples) == sample_size
         return samples
 #%%
