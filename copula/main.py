@@ -47,14 +47,14 @@ def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
     # Stage 1
-    parser.add_argument('--num', type=int, default=0, 
-                        help='model version')
+    parser.add_argument('--seed', type=int, default=0, 
+                        help='seed for repeatable results')
+    # parser.add_argument('--num', type=int, default=0, 
+    #                     help='model version')
     parser.add_argument('--dataset', type=str, default='covtype', 
                         help='Dataset options: covtype, credit, loan, adult, cabs, kings')
-    # parser.add_argument('--beta', default=0.5, type=float,
-    #                     help='scale parameter of asymmetric Laplace distribution')
-    # parser.add_argument('--seed', type=int, default=1, 
-    #                     help='seed for repeatable results')
+    parser.add_argument('--beta', default=0.5, type=float,
+                        help='scale parameter of asymmetric Laplace distribution')
     
     # Stage 2
     parser.add_argument("--latent_dim", default=2, type=int,
@@ -77,12 +77,13 @@ def main():
     config = vars(get_args(debug=False)) # default configuration
     
     """DistVAE model (Stage 1) load"""
-    # artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
-    #     config["beta"], config["dataset"], config["num"]), type='model')
-    artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
-        config["dataset"], config["num"]), type='model')
+    if config["beta"] == 0.1:
+        artifact = wandb.use_artifact('anseunghwan/DistVAE/DistVAE_{}:v{}'.format(
+            config["dataset"], config["seed"]), type='model')
+    else:
+        artifact = wandb.use_artifact('anseunghwan/DistVAE/beta{:.1f}_DistVAE_{}:v{}'.format(
+            config["beta"], config["dataset"], config["seed"]), type='model')
     stage1_config = dict(artifact.metadata.items())
-    config["seed"] = config["num"]
     model_dir = artifact.download()
     
     if not os.path.exists('./assets/{}'.format(config["dataset"])):
@@ -140,12 +141,14 @@ def main():
     #%%
     """Copula model save"""
     torch.save(copula.model.state_dict(), './assets/Copula_{}.pth'.format(config["dataset"]))
-    # artifact = wandb.Artifact('beta{}_Copula_{}'.format(config["beta"], config["dataset"]), 
-    #                         type='model',
-    #                         metadata=config) # description=""
-    artifact = wandb.Artifact('Copula_{}'.format(config["dataset"]), 
-                            type='model',
-                            metadata=config) # description=""
+    if config["beta"] == 0.1:
+        artifact = wandb.Artifact('Copula_{}'.format(config["dataset"]), 
+                                type='model',
+                                metadata=config) # description=""
+    else:
+        artifact = wandb.Artifact('beta{}_Copula_{}'.format(config["beta"], config["dataset"]), 
+                                type='model',
+                                metadata=config) # description=""
     artifact.add_file('./assets/Copula_{}.pth'.format(config["dataset"]))
     artifact.add_file('./main.py')
     artifact.add_file('./copula_modules/copula.py')
