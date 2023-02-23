@@ -60,7 +60,7 @@ def get_args(debug):
     parser.add_argument("--latent_dim", default=2, type=int,
                         help="the latent dimension size")
     
-    parser.add_argument('--epochs', default=150, type=int,
+    parser.add_argument('--epochs', default=200, type=int,
                         help='the number of epochs')
     parser.add_argument('--batch_size', default=256, type=int,
                         help='batch size')

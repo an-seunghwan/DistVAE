@@ -18,8 +18,27 @@ class Discriminator(nn.Module):
         self.config = config
         self.device = device
         
+        # self.mlp = nn.Sequential(
+        #     nn.Linear(config["data_dim"] + config["latent_dim"], 128),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Linear(128, 128),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Linear(128, 128),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Linear(128, 128),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Linear(128, 128),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Linear(128, 128),
+        #     nn.LeakyReLU(0.1),
+        #     nn.Linear(128, 1),
+        #     nn.Sigmoid(),
+        # ).to(device)
+        
         self.mlp1 = nn.Sequential(
             nn.Linear(config["data_dim"], 128),
+            nn.LeakyReLU(0.1),
+            nn.Linear(128, 128),
             nn.LeakyReLU(0.1),
             nn.Linear(128, 128),
             nn.LeakyReLU(0.1),
@@ -30,17 +49,20 @@ class Discriminator(nn.Module):
         ).to(device)
         
         self.mlp2 = nn.Sequential(
-            nn.Linear(2 * config["latent_dim"], 32),
+            nn.Linear(2 * config["latent_dim"], 128),
             nn.LeakyReLU(0.1),
-            nn.Linear(32, 32),
+            nn.Linear(128, 128),
             nn.LeakyReLU(0.1),
-            nn.Linear(32, 32),
+            nn.Linear(128, 128),
             nn.LeakyReLU(0.1),
-            nn.Linear(32, 1),
+            nn.Linear(128, 128),
+            nn.LeakyReLU(0.1),
+            nn.Linear(128, 1),
             nn.Sigmoid(),
         ).to(device)
         
     def forward(self, data):
+        # h = self.mlp(data)
         h = self.mlp1(data[:, : self.config["data_dim"]])
         h = torch.cat([h, data[:, self.config["data_dim"] : ]], dim=1)
         h = self.mlp2(h)
