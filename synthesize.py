@@ -25,6 +25,7 @@ from modules.evaluation import (
     DCR_metric,
     attribute_disclosure
 )
+from dython.nominal import associations
 #%%
 import sys
 import subprocess
@@ -120,6 +121,17 @@ def main():
     """Synthetic Data Generation"""
     n = len(dataset.train)
     syndata = model.generate_data(n, OutputInfo_list, dataset)
+    #%%
+    """Correlation Structure"""
+    syn_asso = associations(
+        syndata, nominal_columns=dataset.discrete,
+        compute_only=True)
+    true_asso = associations(
+        dataset.train_raw, nominal_columns=dataset.discrete,
+        compute_only=True)
+    corr_dist = np.linalg.norm(true_asso["corr"] - syn_asso["corr"])
+    print('Corr Dist: {:.3f}'.format(corr_dist))
+    wandb.log({'Corr Dist': corr_dist})
     #%%
     print("\nStatistical Similarity...\n")
     Dn, W1 = statistical_similarity(
