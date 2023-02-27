@@ -1,7 +1,7 @@
 project: DistVAE
 # program: main.py
-# program: inference.py
-program: synthesize.py
+program: inference.py
+# program: synthesize.py
 # program: shadow_data.py
 # program: shadow_main.py
 # program: shadow_attack.py
@@ -11,10 +11,11 @@ method: grid
 #   name: loss
 parameters:
   num:
-    values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    values: [0]
+    # values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
   # seed:
   #   values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
   dataset:
     values: ['covtype', 'credit', 'adult', 'loan', 'cabs', 'kings']
-  beta:
-    values: [0.5, 1, 5]
+  # beta:
+  #   values: [0.5, 1, 5]

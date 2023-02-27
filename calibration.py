@@ -172,13 +172,14 @@ def main():
     
     fig, ax = plt.subplots(1, 1, figsize=(7, 4))
     
-    ax.step(x_linspace, emp, label="empirical",
+    ax.step(x_linspace, emp, label="empirical", where='post',
             linewidth=3.5, color=u'#ff7f0e')
     ax.plot(x_linspace_est, alpha_est, label="estimate",
             linewidth=3.5, color=u'#2ca02c')
-    ax.step(x_linspace, alpha_mono, label="calibration",
-            linewidth=3.5, linestyle='--', color=u'#1f77b4')
-    ax.set_xlabel(dataset.continuous[j], fontsize=14)
+    ax.step(x_linspace, alpha_mono, label="calibration", where='post',
+            linewidth=3.5, linestyle='--', color='black') # u'#1f77b4'
+    
+    ax.set_xlabel(dataset.continuous[j], fontsize=15)
     # ax.set_ylabel('alpha', fontsize=14)
     ax.tick_params(axis='x', labelsize=14)
     ax.tick_params(axis='y', labelsize=14)

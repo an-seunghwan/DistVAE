@@ -190,16 +190,20 @@ def main():
         if v in dataset.integer:
             ecdf = ECDF(orig[dataset.continuous].to_numpy()[:, k])
             emp = [ecdf(x) for x in x_linspace_orig]
-            ax.flatten()[k].step((x_linspace_orig - dataset.mean[k]) / dataset.std[k], 
-                                 emp, 
-                                 label="empirical", linewidth=3.5, color=u'#ff7f0e')
+            ax.flatten()[k].step(
+                (x_linspace_orig - dataset.mean[k]) / dataset.std[k], 
+                emp, where='post',
+                label="empirical", linewidth=3.5, color=u'#ff7f0e')
         else:
             q = np.arange(0.01, 1, 0.01)
-            ax.flatten()[k].step(np.quantile(dataset.x_data[:, k], q=q), q, 
-                                 label="empirical", linewidth=3.5, color=u'#ff7f0e')
+            ax.flatten()[k].step(
+                np.quantile(dataset.x_data[:, k], q=q), 
+                q, where='post',
+                label="empirical", linewidth=3.5, color=u'#ff7f0e')
         
-        ax.flatten()[k].plot(x_linspace[:, k], alpha_hat[:, k], 
-                             label="estimate", linewidth=3.5, linestyle='dashed', color=u'#1f77b4')    
+        ax.flatten()[k].plot(
+            x_linspace[:, k], alpha_hat[:, k], 
+            label="estimate", linewidth=3.5, linestyle='dashed', color=u'#1f77b4')    
         
         ax.flatten()[k].set_xlabel(v, fontsize=12)
         # ax.flatten()[k].set_ylabel('CDF', fontsize=12)
