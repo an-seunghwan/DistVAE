@@ -37,7 +37,7 @@ except:
 run = wandb.init(
     project="DistVAE", 
     entity="anseunghwan",
-    tags=['DistVAE', 'Calibration'],
+    tags=['DistVAE', 'Complexity'],
 )
 #%%
 import argparse
@@ -46,8 +46,8 @@ def get_args(debug):
     
     parser.add_argument('--num', type=int, default=0, 
                         help='model version')
-    parser.add_argument('--dataset', type=str, default='adult', 
-                        help='Dataset options: supports only adult!')
+    parser.add_argument('--dataset', type=str, default='covtype', 
+                        help='Dataset options: supports only covtype!')
 
     if debug:
         return parser.parse_args(args=[])
@@ -106,90 +106,60 @@ def main():
     
     model.eval()
     #%%
-    df = dataset.train_raw[dataset.continuous]
-    #%%
-    MC = 5000
-    j = 1 # educational-num
+    """Complexity of CDF"""
+    MC = 100
+    j = 4 # Vertical_Distance_To_Hydrology
     
     n = 100
     x_linspace_est = np.linspace(
         np.min(dataset.x_data[:, j]),
         np.max(dataset.x_data[:, j]),
         n)
+    x_linspace_est = torch.from_numpy(x_linspace_est[:, None]).clone()
     
-    """Quantile Estimation with sampling mechanism"""
-    alpha_est = torch.zeros((len(x_linspace_est), 1))
-    for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
-        randn = torch.randn(len(x_linspace_est), config["latent_dim"]) # prior
+    alpha_MC = torch.zeros(n, 1)
+    alpha_conditional = []
+    for _ in range(MC):
+        idx = np.random.choice(
+            range(len(dataset.x_data)), 1, replace=False)
+        x_batch = torch.FloatTensor(dataset.x_data[idx, :]).to(device)
         with torch.no_grad():
-            gamma, beta, _ = model.quantile_parameter(randn)
-            x_tmp = torch.from_numpy(x_linspace_est[:, None]).clone()
-            alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
-            alpha_est += alpha_tilde
-    alpha_est /= MC
-    
+            z, mean, logvar, gamma, beta, _ = model(x_batch) # posterior
+            a = model._quantile_inverse(x_linspace_est, gamma, beta, j)
+        alpha_conditional.append(a)
+        alpha_MC += a
+    alpha_MC /= MC
+    #%%
+    x_linspace_est = np.linspace(
+        np.min(dataset.x_data[:, j]),
+        np.max(dataset.x_data[:, j]),
+        n)
     x_linspace_est = x_linspace_est * dataset.std[j] + dataset.mean[j]
-    #%%
-    """Calibration Step 1. Estimate F(x + 0.5), F(x - 0.5)"""
-    x_linspace = [np.arange(x, y+2, 1) - 0.5 for x, y in zip(
-        [np.min(df.to_numpy()[:, j])],
-        [np.max(df.to_numpy()[:, j])])][0]
     
-    alpha_hat = torch.zeros((len(x_linspace), 1))
-    for _ in tqdm.tqdm(range(MC), desc="Estimate CDF..."):
-        randn = torch.randn(len(x_linspace), config["latent_dim"]) # prior
-        with torch.no_grad():
-            gamma, beta, _ = model.quantile_parameter(randn)
-            x_tmp = torch.from_numpy(x_linspace[:, None]).clone()
-            x_tmp -= dataset.mean.to_numpy()[j]
-            x_tmp /= dataset.std.to_numpy()[j]
-            alpha_tilde = model._quantile_inverse(x_tmp, gamma, beta, j)
-            alpha_hat += alpha_tilde
-    alpha_hat /= MC
-    
-    x_linspace = [np.arange(x, y+1, 1) for x, y in zip(
-        [np.min(df.to_numpy()[:, j])],
-        [np.max(df.to_numpy()[:, j])])][0]
-    #%%
-    """Calibration Step 2. Discretization F^*(x) = F^*(x-1) + F(x+0.5) - F(x-0.5)"""
-    alpha_cal = []
-    for i in range(len(alpha_hat)-1):
-        alpha_cal.append((alpha_hat[i+1] - alpha_hat[i]).item())
-    alpha_cal /= np.sum(alpha_cal)
-    alpha_cal = np.cumsum(alpha_cal)
-    #%%
-    """Calibration Step 3. Ensure monotonicity"""
-    alpha_mono = [alpha_cal[0]]
-    for i in range(1, len(alpha_cal)):
-        if alpha_cal[i] < alpha_mono[-1]:
-            alpha_mono.append(alpha_mono[-1])
-        else:
-            alpha_mono.append(alpha_cal[i])
-    #%%
-    ecdf = ECDF(df[dataset.continuous].to_numpy()[:, j])
-    emp = [ecdf(x) for x in x_linspace]
-    
-    fig, ax = plt.subplots(1, 1, figsize=(7, 4))
-    
-    ax.step(x_linspace, emp, label="empirical", where='post',
-            linewidth=3.5, color=u'#ff7f0e')
-    ax.plot(x_linspace_est, alpha_est, label="estimate",
-            linewidth=3.5, color=u'#2ca02c')
-    ax.step(x_linspace, alpha_mono, label="calibration", where='post',
-            linewidth=3.5, linestyle='--', color='black') # u'#1f77b4'
-    
-    ax.set_xlabel(dataset.continuous[j], fontsize=15)
-    # ax.set_ylabel('alpha', fontsize=14)
-    ax.tick_params(axis='x', labelsize=14)
-    ax.tick_params(axis='y', labelsize=14)
-    plt.grid(True, axis='y', linestyle='--')
-    
-    plt.legend(fontsize=14)
+    m = 10
+    fig, ax = plt.subplots(1, 2, figsize=(6, 3))
+    for a in alpha_conditional[-m:]:
+        ax[0].plot(
+            x_linspace_est, a, 
+            color='black', linestyle='--', linewidth=1)
+    ax[0].plot(
+        x_linspace_est, alpha_MC,
+        color='blue', linewidth=3)
+    ax[0].set_xlabel(dataset.continuous[j])
+    for a in alpha_conditional[-m:]:
+        ax[1].plot(
+            x_linspace_est, a, 
+            color='black', linestyle='--', linewidth=1)
+    ax[1].plot(
+        x_linspace_est, alpha_MC,
+        color='blue', linewidth=3)
+    ax[1].set_xlim(0, 150)
+    ax[1].set_xlabel(dataset.continuous[j])
     plt.tight_layout()
-    plt.savefig('./assets/{}/{}_CDF_calibration.png'.format(config["dataset"], config["dataset"]))
+    plt.savefig('./assets/{}/{}_CDF_complexity.png'.format(config["dataset"], config["dataset"]))
     plt.show()
     plt.close()
-    wandb.log({'CDF calibration': wandb.Image(fig)})
+    wandb.log({'CDF complexity': wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
