@@ -111,9 +111,13 @@ def main():
     n = 100
     MC = 5000
     x_linspace = np.linspace(
-        [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
-        [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
+        [np.min(dataset.x_data[:, k]) for k in range(len(dataset.continuous))],
+        [np.max(dataset.x_data[:, k]) for k in range(len(dataset.continuous))],
         n)
+    # x_linspace = np.linspace(
+    #     [np.quantile(dataset.x_data[:, k], q=0.01) for k in range(len(dataset.continuous))],
+    #     [np.quantile(dataset.x_data[:, k], q=0.99) for k in range(len(dataset.continuous))],
+    #     n)
     x_linspace = torch.from_numpy(x_linspace)
     
     alpha_hat = torch.zeros((n, len(dataset.continuous)))
@@ -185,8 +189,11 @@ def main():
     
     for k, v in enumerate(dataset.continuous):
         x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
-            [np.quantile(orig.to_numpy()[:, k], q=0.01)],
-            [np.quantile(orig.to_numpy()[:, k], q=0.99)])][0]
+            [np.min(orig.to_numpy()[:, k])],
+            [np.max(orig.to_numpy()[:, k])])][0]
+        # x_linspace_orig = [np.arange(x, y, 1) for x, y in zip(
+        #     [np.quantile(orig.to_numpy()[:, k], q=0.01)],
+        #     [np.quantile(orig.to_numpy()[:, k], q=0.99)])][0]
         if v in dataset.integer:
             ecdf = ECDF(orig[dataset.continuous].to_numpy()[:, k])
             emp = [ecdf(x) for x in x_linspace_orig]
