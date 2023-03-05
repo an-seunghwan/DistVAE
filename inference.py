@@ -202,7 +202,7 @@ def main():
                 emp, where='post',
                 label="empirical", linewidth=3.5, color=u'#ff7f0e')
         else:
-            q = np.arange(0.01, 1, 0.01)
+            q = np.linspace(0, 1, 100)
             ax.flatten()[k].step(
                 np.quantile(dataset.x_data[:, k], q=q), 
                 q, where='post',
