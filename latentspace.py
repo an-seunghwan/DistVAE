@@ -40,10 +40,10 @@ import argparse
 def get_args(debug):
     parser = argparse.ArgumentParser('parameters')
     
-    parser.add_argument('--num', type=int, default=0, 
+    parser.add_argument('--num', type=int, default=1, 
                         help='model version')
-    parser.add_argument('--dataset', type=str, default='credit', 
-                        help='Dataset options: (only) credit')
+    parser.add_argument('--dataset', type=str, default='loan', 
+                        help='Dataset options: covtype, credit, loan, adult, cabs, kings')
     parser.add_argument('--beta', default=0.5, type=float,
                         help='observation noise')
 
@@ -104,6 +104,33 @@ def main():
     
     model.eval()
     #%%
+    latents = []
+    dataloader_ = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)
+    for (x_batch) in tqdm.tqdm(iter(dataloader_), desc="inner loop"):
+        if config["cuda"]:
+            x_batch = x_batch.cuda()
+        
+        with torch.no_grad():
+            mean, logvar = model.get_posterior(x_batch)
+        latents.append(mean)
+    latents = torch.cat(latents, dim=0).numpy()
+    #%%
+    plt.figure(figsize=(5, 5))
+    plt.scatter(
+        latents[:, 0], latents[:, 1],
+        s=3)
+    # plt.xlim(-4, 4)
+    # plt.ylim(-4, 4)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.xlabel('$z_1$', fontsize=18)
+    plt.ylabel('$z_2$', fontsize=18)
+    
+    plt.tight_layout()
+    plt.savefig('./assets/{}/{}_clustered_latent_space.png'.format(config["dataset"], config["dataset"]))
+    # plt.show()
+    plt.close()
+    #%%
     if config["dataset"] == 'credit':
         #%%
         latents = []
@@ -117,22 +144,6 @@ def main():
             latents.append(mean)
         latents = torch.cat(latents, dim=0).numpy()
         labels = dataset.train['TARGET_1'].to_numpy()
-        #%%
-        plt.figure(figsize=(5, 5))
-        plt.scatter(
-            latents[:, 0], latents[:, 1],
-            s=3)
-        # plt.xlim(-4, 4)
-        # plt.ylim(-4, 4)
-        plt.xticks(fontsize=14)
-        plt.yticks(fontsize=14)
-        plt.xlabel('$z_1$', fontsize=18)
-        plt.ylabel('$z_2$', fontsize=18)
-        
-        plt.tight_layout()
-        plt.savefig('./assets/{}/{}_clustered_latent_space.png'.format(config["dataset"], config["dataset"]))
-        # plt.show()
-        plt.close()
         #%%
         plt.figure(figsize=(5, 5))
         plt.scatter(
@@ -171,9 +182,6 @@ def main():
         plt.savefig('./assets/{}/{}_label_ratio.png'.format(config["dataset"], config["dataset"]))
         # plt.show()
         plt.close()
-        #%%
-    else:
-        raise ValueError('Not supported dataset!')
     #%%
     wandb.run.finish()
 #%%
