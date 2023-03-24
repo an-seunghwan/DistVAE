@@ -131,6 +131,35 @@ def main():
     # plt.show()
     plt.close()
     #%%
+    # from sklearn.cluster import KMeans
+    # kmeans = KMeans(
+    #     init="random",
+    #     n_clusters=20,
+    #     random_state=0
+    # )
+    # kmeans.fit(dataset.x_data[:, :config["CRPS_dim"]])
+    # #%%
+    # plt.figure(figsize=(5, 5))
+    # for c in np.unique(kmeans.labels_):
+    #     plt.scatter(
+    #         latents[kmeans.labels_ == c, 0], 
+    #         latents[kmeans.labels_ == c, 1], 
+    #         s=4)
+    # # plt.scatter(
+    # #     latents[:, 0], latents[:, 1],
+    # #     s=3)
+    # # plt.xlim(-4, 4)
+    # # plt.ylim(-4, 4)
+    # plt.xticks(fontsize=14)
+    # plt.yticks(fontsize=14)
+    # plt.xlabel('$z_1$', fontsize=18)
+    # plt.ylabel('$z_2$', fontsize=18)
+    
+    # plt.tight_layout()
+    # # plt.savefig('./assets/{}/{}_clustered_latent_space.png'.format(config["dataset"], config["dataset"]))
+    # plt.show()
+    # plt.close()
+    #%%
     if config["dataset"] == 'credit':
         #%%
         latents = []
