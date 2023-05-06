@@ -1,10 +1,11 @@
 project: DistVAE
 # program: main.py
-program: inference.py
+# program: inference.py
 # program: synthesize.py
 # program: shadow_data.py
 # program: shadow_main.py
 # program: shadow_attack.py
+program: latentspace.py
 method: grid
 # metric:
 #   goal: minimize
