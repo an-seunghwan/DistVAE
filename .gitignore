@@ -22,3 +22,9 @@ copula
 sweep.*
 latentspace.py
 complexity.py
+assets/cabs
+assets/adult
+assets/covtype
+assets/credit
+assets/kings
+assets/loan
