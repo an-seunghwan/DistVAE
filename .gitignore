@@ -19,3 +19,6 @@ wandb*
 privacy
 *.npy
 copula
+sweep.*
+latentspace.py
+complexity.py
