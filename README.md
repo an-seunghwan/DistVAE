@@ -50,7 +50,6 @@ python main.py --dataset <dataset>
 +-- shadow_data.py
 +-- shadow_main.py
 +-- shadow_attack.py
-+-- requirements.txt
 +-- LICENSE
 +-- README.md
 ```
