@@ -19,12 +19,8 @@ python main.py --dataset <dataset>
 - Discretize estimated CDF example: `calibration.py`
 - Membership inference attack for VAE: 
   - `shadow_data.py`: generate training/test datasets for shadow models
-  - `shadow_main.py` : training shadow models using training datasets from `shadow_data.py`
+  - `shadow_main.py`: training shadow models using training datasets from `shadow_data.py`
   - `shadow_attack.py`: evaluate membership inference attack for VAE
-
-## Results
-
-<center><img  src="https://github.com/an-seunghwan/DistVAE/blob/main/assets/cabs/cabs_estimated_quantile.png?raw=true" width="800"  height="150"></center>
 
 ## directory and codes
 
