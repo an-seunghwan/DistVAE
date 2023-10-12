@@ -35,9 +35,9 @@ except:
     import wandb
 
 run = wandb.init(
-    project="DistVAE", 
-    entity="anseunghwan",
-    tags=['DistVAE', 'Calibration'],
+    project="DistVAE", # put your WANDB project name
+    entity="anseunghwan", # put your WANDB username
+    tags=['DistVAE', 'Calibration'], # put tags of this python project
 )
 #%%
 import argparse
