@@ -22,7 +22,7 @@ python main.py --dataset <dataset>
   - `shadow_main.py`: training shadow models using training datasets from `shadow_data.py`
   - `shadow_attack.py`: evaluate membership inference attack for VAE
 
-## directory and codes
+## Directory and codes
 
 ```
 .
@@ -48,4 +48,16 @@ python main.py --dataset <dataset>
 +-- shadow_attack.py
 +-- LICENSE
 +-- README.md
+```
+
+## Citation
+```
+@inproceedings{
+an2023distributional,
+title={Distributional Learning of Variational AutoEncoder: Application to Synthetic Data Generation},
+author={SeungHwan An and Jong-June Jeon},
+booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
+year={2023},
+url={https://openreview.net/forum?id=GxL6PrmEUw}
+}
 ```
