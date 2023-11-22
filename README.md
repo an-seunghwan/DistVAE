@@ -55,7 +55,7 @@ python main.py --dataset <dataset>
 @inproceedings{
 an2023distributional,
 title={Distributional Learning of Variational AutoEncoder: Application to Synthetic Data Generation},
-author={SeungHwan An and Jong-June Jeon},
+author={Seunghwan An and Jong-June Jeon},
 booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
 year={2023},
 url={https://openreview.net/forum?id=GxL6PrmEUw}
